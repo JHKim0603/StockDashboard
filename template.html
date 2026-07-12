@@ -1,0 +1,699 @@
+<title>주식 요약 대시보드</title>
+<style>
+  .viz-root {
+    --page:            #f9f9f7;
+    --surface:         #fcfcfb;
+    --surface-raised:  #ffffff;
+    --ink-primary:     #0b0b0b;
+    --ink-secondary:   #52514e;
+    --ink-muted:       #898781;
+    --gridline:        #e1e0d9;
+    --border:          rgba(11,11,11,0.10);
+    --accent:          #2a78d6;
+    --accent-wash:     rgba(42,120,214,0.08);
+    --good:            #006300;
+    --good-wash:       rgba(12,163,12,0.10);
+    --bad:             #b3221f;
+    --bad-wash:        rgba(227,73,72,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    .viz-root {
+      --page:            #0d0d0d;
+      --surface:         #1a1a19;
+      --surface-raised:  #212120;
+      --ink-primary:     #ffffff;
+      --ink-secondary:   #c3c2b7;
+      --ink-muted:       #898781;
+      --gridline:        #2c2c2a;
+      --border:          rgba(255,255,255,0.10);
+      --accent:          #3987e5;
+      --accent-wash:     rgba(57,135,229,0.14);
+      --good:            #0ca30c;
+      --good-wash:       rgba(12,163,12,0.16);
+      --bad:             #e66767;
+      --bad-wash:        rgba(230,103,103,0.14);
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    --page:            #0d0d0d;
+    --surface:         #1a1a19;
+    --surface-raised:  #212120;
+    --ink-primary:     #ffffff;
+    --ink-secondary:   #c3c2b7;
+    --ink-muted:       #898781;
+    --gridline:        #2c2c2a;
+    --border:          rgba(255,255,255,0.10);
+    --accent:          #3987e5;
+    --accent-wash:     rgba(57,135,229,0.14);
+    --good:            #0ca30c;
+    --good-wash:       rgba(12,163,12,0.16);
+    --bad:             #e66767;
+    --bad-wash:        rgba(230,103,103,0.14);
+  }
+  :root[data-theme="light"] .viz-root {
+    --page:            #f9f9f7;
+    --surface:         #fcfcfb;
+    --surface-raised:  #ffffff;
+    --ink-primary:     #0b0b0b;
+    --ink-secondary:   #52514e;
+    --ink-muted:       #898781;
+    --gridline:        #e1e0d9;
+    --border:          rgba(11,11,11,0.10);
+    --accent:          #2a78d6;
+    --accent-wash:     rgba(42,120,214,0.08);
+    --good:            #006300;
+    --good-wash:       rgba(12,163,12,0.10);
+    --bad:             #b3221f;
+    --bad-wash:        rgba(227,73,72,0.10);
+  }
+
+  .viz-root {
+    font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+    background: var(--page);
+    color: var(--ink-primary);
+    min-height: 100vh;
+    box-sizing: border-box;
+    padding: 32px clamp(16px, 4vw, 48px) 56px;
+  }
+  .viz-root *, .viz-root *::before, .viz-root *::after { box-sizing: border-box; }
+
+  .topbar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    max-width: 1120px;
+    margin: 0 auto 28px;
+  }
+  .topbar h1 {
+    font-size: 22px;
+    font-weight: 650;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  .topbar .sub {
+    font-size: 13px;
+    color: var(--ink-muted);
+  }
+  .updated-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--ink-secondary);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .updated-pill .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--good);
+    flex: none;
+  }
+
+  .grid {
+    max-width: 1120px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .card-head .name {
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .card-head .ticker {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-top: 2px;
+  }
+  .market-chip {
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--ink-muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 7px;
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .price-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .price {
+    font-size: 30px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .price .ccy {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink-muted);
+    margin-right: 2px;
+  }
+  .delta-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    border-radius: 999px;
+    padding: 4px 9px;
+  }
+  .delta-pill.up   { color: var(--good); background: var(--good-wash); }
+  .delta-pill.down { color: var(--bad);  background: var(--bad-wash); }
+
+  .chart-block { display: flex; flex-direction: column; gap: 6px; }
+
+  .range-toggle {
+    display: flex;
+    gap: 2px;
+    align-self: flex-end;
+  }
+  .range-toggle button {
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 3px 8px;
+    cursor: pointer;
+  }
+  .range-toggle button:hover { color: var(--ink-secondary); }
+  .range-toggle button.active { color: var(--accent); background: var(--accent-wash); }
+  .range-toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .chart-row {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    height: 82px;
+  }
+  .y-axis {
+    position: relative;
+    width: 34px;
+    flex: none;
+  }
+  .y-axis span {
+    position: absolute;
+    left: 0;
+    right: 0;
+    transform: translateY(-50%);
+    text-align: right;
+    font-size: 10px;
+    color: var(--ink-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .plot-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+  }
+  .plot-wrap svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .x-axis {
+    position: relative;
+    height: 14px;
+    margin-left: 40px;
+  }
+  .x-axis span {
+    position: absolute;
+    top: 0;
+    font-size: 10px;
+    color: var(--ink-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .spark-tooltip {
+    position: absolute;
+    top: -6px;
+    transform: translate(-50%, -100%);
+    background: var(--ink-primary);
+    color: var(--surface);
+    font-size: 11px;
+    line-height: 1.4;
+    padding: 5px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s ease;
+    font-variant-numeric: tabular-nums;
+    z-index: 2;
+  }
+  .spark-tooltip.visible { opacity: 1; }
+  .spark-tooltip .d { opacity: 0.7; margin-right: 5px; }
+
+  .summary {
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--ink-secondary);
+  }
+
+  .meta-row {
+    display: flex;
+    gap: 18px;
+    padding-top: 12px;
+    border-top: 1px solid var(--gridline);
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+  .meta-row .val {
+    color: var(--ink-secondary);
+    font-variant-numeric: tabular-nums;
+    margin-left: 4px;
+  }
+
+  .news-block { padding-top: 12px; border-top: 1px solid var(--gridline); }
+  .news-label {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 6px;
+  }
+  .news-list { list-style: none; margin: 0; padding: 0; }
+  .news-list li + li { border-top: 1px solid var(--gridline); }
+  .news-list li { padding: 7px 0; }
+  .news-list a {
+    display: block;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--ink-secondary);
+    text-decoration: none;
+  }
+  .news-list a:hover { color: var(--accent); text-decoration: underline; }
+  .news-list a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .news-list .arrow { color: var(--ink-muted); margin-left: 3px; }
+  .news-meta {
+    display: block;
+    font-size: 11px;
+    color: var(--ink-muted);
+    margin-top: 2px;
+  }
+  .news-empty { font-size: 12.5px; color: var(--ink-muted); }
+
+  .footnote {
+    max-width: 1120px;
+    margin: 28px auto 0;
+    font-size: 12px;
+    color: var(--ink-muted);
+    line-height: 1.6;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spark-tooltip { transition: none; }
+  }
+</style>
+
+<div class="viz-root">
+  <div class="topbar">
+    <div>
+      <h1>주식 요약 대시보드</h1>
+      <div class="sub">관심 종목 <span id="stock-count"></span>건 · Yahoo Finance 실시간(지연) 시세 · Google 뉴스 최근 이슈</div>
+    </div>
+    <div class="updated-pill"><span class="dot"></span><span id="updated-text">불러오는 중…</span></div>
+  </div>
+
+  <div class="grid" id="card-grid"></div>
+
+  <p class="footnote">
+    * 시세 출처: Yahoo Finance 무료 API(최대 15~20분 지연 가능). 최근 이슈는 Google 뉴스 검색 상위 기사의 원문 제목이며
+    AI가 작성한 요약이 아닙니다. 투자 판단의 참고용으로만 사용하세요 — 개인 용도 조회입니다.
+    레버리지·인버스 상품은 일간 수익률을 추종하므로 장기 보유 시 실제 누적 수익률이 기초자산과 크게 달라질 수 있습니다.
+  </p>
+</div>
+
+<script>
+(function () {
+  const stocks = __STOCKS_JSON__;
+  const fetchedAt = "__FETCHED_AT__";
+  const RANGES = [
+    { key: "1M", label: "1개월", days: 22 },
+    { key: "3M", label: "3개월", days: 64 },
+    { key: "6M", label: "6개월", days: 127 },
+    { key: "1Y", label: "1년",   days: Infinity }
+  ];
+  const DEFAULT_RANGE = "1M";
+
+  function fmtNum(n, ccy) {
+    const opts = ccy === "₩" ? { maximumFractionDigits: 0 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+    return n.toLocaleString("en-US", opts);
+  }
+
+  function fmtAxisPrice(v, ccy) {
+    if (ccy === "₩") return (v / 10000).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "만";
+    return v >= 100 ? v.toFixed(0) : v.toFixed(1);
+  }
+
+  function fmtCompact(n) {
+    if (n >= 1e9) return (n / 1e9).toFixed(1) + "B";
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
+    return String(n);
+  }
+
+  function fmtDateLabel(isoDate) {
+    const [y, m, d] = isoDate.split("-");
+    return parseInt(m, 10) + "/" + parseInt(d, 10);
+  }
+
+  function buildCard(stock) {
+    const s = stock.series;
+    const last = s[s.length - 1];
+    const prev = s[s.length - 2];
+    const diff = last - prev;
+    const pct = (diff / prev) * 100;
+    const up = diff >= 0;
+
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const head = document.createElement("div");
+    head.className = "card-head";
+    head.innerHTML =
+      '<div><div class="name"></div><div class="ticker"></div></div>' +
+      '<div class="market-chip"></div>';
+    head.querySelector(".name").textContent = stock.name;
+    head.querySelector(".ticker").textContent = stock.ticker;
+    head.querySelector(".market-chip").textContent = stock.market;
+    card.appendChild(head);
+
+    const priceRow = document.createElement("div");
+    priceRow.className = "price-row";
+    const priceEl = document.createElement("div");
+    priceEl.className = "price";
+    priceEl.innerHTML = '<span class="ccy">' + stock.currency + '</span>' + fmtNum(last, stock.currency);
+    const deltaEl = document.createElement("div");
+    deltaEl.className = "delta-pill " + (up ? "up" : "down");
+    deltaEl.textContent = (up ? "▲ " : "▼ ") + (up ? "+" : "") + fmtNum(diff, stock.currency) + " (" + (up ? "+" : "") + pct.toFixed(2) + "%)";
+    priceRow.appendChild(priceEl);
+    priceRow.appendChild(deltaEl);
+    card.appendChild(priceRow);
+
+    card.appendChild(buildChartBlock(stock));
+
+    const summary = document.createElement("div");
+    summary.className = "summary";
+    summary.textContent = stock.summary;
+    card.appendChild(summary);
+
+    const meta = document.createElement("div");
+    meta.className = "meta-row";
+    meta.innerHTML =
+      '<div>거래량<span class="val"></span></div>' +
+      '<div>52주 범위<span class="val"></span></div>';
+    meta.querySelectorAll(".val")[0].textContent = fmtCompact(stock.volume);
+    meta.querySelectorAll(".val")[1].textContent = stock.currency + fmtNum(stock.rangeLow, stock.currency) + " – " + stock.currency + fmtNum(stock.rangeHigh, stock.currency);
+    card.appendChild(meta);
+
+    card.appendChild(buildNewsBlock(stock));
+
+    return card;
+  }
+
+  function buildNewsBlock(stock) {
+    const block = document.createElement("div");
+    block.className = "news-block";
+    const label = document.createElement("div");
+    label.className = "news-label";
+    label.textContent = "최근 이슈";
+    block.appendChild(label);
+
+    const items = stock.news || [];
+    if (items.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "news-empty";
+      empty.textContent = "관련 뉴스를 가져오지 못했습니다.";
+      block.appendChild(empty);
+      return block;
+    }
+
+    const list = document.createElement("ul");
+    list.className = "news-list";
+    items.forEach(item => {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = item.link;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.innerHTML = "";
+      const titleSpan = document.createElement("span");
+      titleSpan.textContent = item.title;
+      const arrow = document.createElement("span");
+      arrow.className = "arrow";
+      arrow.textContent = "↗";
+      a.appendChild(titleSpan);
+      a.appendChild(arrow);
+      const metaSpan = document.createElement("span");
+      metaSpan.className = "news-meta";
+      metaSpan.textContent = [item.source, item.date].filter(Boolean).join(" · ");
+      a.appendChild(metaSpan);
+      li.appendChild(a);
+      list.appendChild(li);
+    });
+    block.appendChild(list);
+    return block;
+  }
+
+  function buildChartBlock(stock) {
+    const block = document.createElement("div");
+    block.className = "chart-block";
+
+    const toggle = document.createElement("div");
+    toggle.className = "range-toggle";
+    const slot = document.createElement("div");
+    slot.className = "spark-slot";
+
+    let current = DEFAULT_RANGE;
+
+    function render() {
+      slot.innerHTML = "";
+      slot.appendChild(buildSparkline(stock, current));
+      toggle.querySelectorAll("button").forEach(b => {
+        b.classList.toggle("active", b.dataset.range === current);
+      });
+    }
+
+    RANGES.forEach(r => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = r.label;
+      btn.dataset.range = r.key;
+      btn.addEventListener("click", () => { current = r.key; render(); });
+      toggle.appendChild(btn);
+    });
+
+    block.appendChild(toggle);
+    block.appendChild(slot);
+    render();
+    return block;
+  }
+
+  function sliceForRange(stock, rangeKey) {
+    const days = RANGES.find(r => r.key === rangeKey).days;
+    const n = stock.series.length;
+    const count = days === Infinity ? n : Math.min(days, n);
+    return {
+      series: stock.series.slice(n - count),
+      dates: stock.dates.slice(n - count)
+    };
+  }
+
+  function buildSparkline(stock, rangeKey) {
+    const { series: data, dates } = sliceForRange(stock, rangeKey);
+    const ccy = stock.currency;
+
+    // Axis labels are plain HTML (not SVG <text>) on purpose: the SVG below uses
+    // preserveAspectRatio="none" so it can stretch to fill the card width, and that
+    // non-uniform scale distorts SVG text glyphs (numbers look squashed/"broken").
+    // Plain DOM text is never subject to that scale, so it stays crisp.
+    const chartWrap = document.createElement("div");
+    chartWrap.className = "chart-wrap";
+    const chartRow = document.createElement("div");
+    chartRow.className = "chart-row";
+    const yAxis = document.createElement("div");
+    yAxis.className = "y-axis";
+    const plotWrap = document.createElement("div");
+    plotWrap.className = "plot-wrap";
+    const xAxis = document.createElement("div");
+    xAxis.className = "x-axis";
+    chartRow.appendChild(yAxis);
+    chartRow.appendChild(plotWrap);
+    chartWrap.appendChild(chartRow);
+    chartWrap.appendChild(xAxis);
+
+    const W = 300, H = 64;
+    const pad = 7;
+    const min = Math.min(...data), max = Math.max(...data);
+    const mid = (min + max) / 2;
+    const range = (max - min) || 1;
+    const n = data.length;
+    const plotW = W - pad * 2;
+    const plotH = H - pad * 2;
+    const x = i => pad + (n === 1 ? 0 : (i / (n - 1)) * plotW);
+    const y = v => pad + (1 - (v - min) / range) * plotH;
+
+    const points = data.map((v, i) => [x(i), y(v)]);
+    const linePath = points.map((p, i) => (i === 0 ? "M" : "L") + p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+    const baseline = H - pad;
+    const areaPath = linePath + " L" + x(n - 1).toFixed(1) + "," + baseline + " L" + pad + "," + baseline + " Z";
+
+    const trendUp = data[data.length - 1] >= data[0];
+    const lineColor = trendUp ? "var(--good)" : "var(--bad)";
+
+    [max, mid, min].forEach(v => {
+      const label = document.createElement("span");
+      label.style.top = ((y(v) / H) * 100) + "%";
+      label.textContent = fmtAxisPrice(v, ccy);
+      yAxis.appendChild(label);
+    });
+
+    const xTickIdx = n > 2 ? [0, Math.floor((n - 1) / 2), n - 1] : [0, n - 1];
+    const xAnchor = xTickIdx.length === 3 ? ["start", "middle", "end"] : ["start", "end"];
+    xTickIdx.forEach((idx, k) => {
+      const label = document.createElement("span");
+      const leftPct = (x(idx) / W) * 100;
+      label.style.left = leftPct + "%";
+      label.style.transform =
+        xAnchor[k] === "middle" ? "translateX(-50%)" :
+        xAnchor[k] === "end" ? "translateX(-100%)" : "none";
+      label.textContent = fmtDateLabel(dates[idx]);
+      xAxis.appendChild(label);
+    });
+
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("preserveAspectRatio", "none");
+
+    [max, mid, min].forEach(v => {
+      const gy = y(v);
+      const gl = document.createElementNS(svgNS, "line");
+      gl.setAttribute("x1", String(pad)); gl.setAttribute("x2", String(W - pad));
+      gl.setAttribute("y1", gy.toFixed(1)); gl.setAttribute("y2", gy.toFixed(1));
+      gl.setAttribute("stroke", "var(--gridline)");
+      gl.setAttribute("stroke-width", "1");
+      gl.setAttribute("vector-effect", "non-scaling-stroke");
+      svg.appendChild(gl);
+    });
+
+    const area = document.createElementNS(svgNS, "path");
+    area.setAttribute("d", areaPath);
+    area.setAttribute("fill", lineColor);
+    area.setAttribute("opacity", "0.08");
+    area.setAttribute("stroke", "none");
+    svg.appendChild(area);
+
+    const line = document.createElementNS(svgNS, "path");
+    line.setAttribute("d", linePath);
+    line.setAttribute("fill", "none");
+    line.setAttribute("stroke", lineColor);
+    line.setAttribute("stroke-width", "2");
+    line.setAttribute("stroke-linecap", "round");
+    line.setAttribute("stroke-linejoin", "round");
+    line.setAttribute("vector-effect", "non-scaling-stroke");
+    svg.appendChild(line);
+
+    const haloR = 6.5, dotR = 3;
+    const last = points[n - 1];
+    const halo = document.createElementNS(svgNS, "circle");
+    halo.setAttribute("cx", last[0].toFixed(1)); halo.setAttribute("cy", last[1].toFixed(1));
+    halo.setAttribute("r", String(haloR));
+    halo.setAttribute("fill", lineColor);
+    halo.setAttribute("opacity", "0.14");
+    svg.appendChild(halo);
+    const dot = document.createElementNS(svgNS, "circle");
+    dot.setAttribute("cx", last[0].toFixed(1)); dot.setAttribute("cy", last[1].toFixed(1));
+    dot.setAttribute("r", String(dotR));
+    dot.setAttribute("fill", lineColor);
+    svg.appendChild(dot);
+
+    const crossLine = document.createElementNS(svgNS, "line");
+    crossLine.setAttribute("y1", String(pad)); crossLine.setAttribute("y2", String(baseline));
+    crossLine.setAttribute("stroke", "var(--ink-muted)");
+    crossLine.setAttribute("stroke-width", "1");
+    crossLine.setAttribute("stroke-dasharray", "2,2");
+    crossLine.setAttribute("opacity", "0");
+    crossLine.setAttribute("vector-effect", "non-scaling-stroke");
+    svg.appendChild(crossLine);
+
+    const crossDot = document.createElementNS(svgNS, "circle");
+    crossDot.setAttribute("r", "3.5");
+    crossDot.setAttribute("fill", "var(--surface)");
+    crossDot.setAttribute("stroke", lineColor);
+    crossDot.setAttribute("stroke-width", "2");
+    crossDot.setAttribute("opacity", "0");
+    svg.appendChild(crossDot);
+
+    const tooltip = document.createElement("div");
+    tooltip.className = "spark-tooltip";
+    plotWrap.appendChild(svg);
+    plotWrap.appendChild(tooltip);
+
+    plotWrap.addEventListener("mousemove", (e) => {
+      const rect = plotWrap.getBoundingClientRect();
+      const relX = ((e.clientX - rect.left) / rect.width) * W;
+      let idx = Math.round(((relX - pad) / plotW) * (n - 1));
+      idx = Math.max(0, Math.min(n - 1, idx));
+      const [px, py] = points[idx];
+      crossLine.setAttribute("x1", px.toFixed(1));
+      crossLine.setAttribute("x2", px.toFixed(1));
+      crossLine.setAttribute("opacity", "1");
+      crossDot.setAttribute("cx", px.toFixed(1));
+      crossDot.setAttribute("cy", py.toFixed(1));
+      crossDot.setAttribute("opacity", "1");
+      tooltip.innerHTML = '<span class="d">' + dates[idx] + '</span>' + ccy + fmtNum(data[idx], ccy);
+      tooltip.style.left = ((px / W) * 100) + "%";
+      tooltip.classList.add("visible");
+    });
+    plotWrap.addEventListener("mouseleave", () => {
+      crossLine.setAttribute("opacity", "0");
+      crossDot.setAttribute("opacity", "0");
+      tooltip.classList.remove("visible");
+    });
+
+    return chartWrap;
+  }
+
+  const grid = document.getElementById("card-grid");
+  stocks.forEach(s => grid.appendChild(buildCard(s)));
+  document.getElementById("stock-count").textContent = stocks.length;
+
+  const d = new Date(fetchedAt);
+  document.getElementById("updated-text").textContent =
+    d.toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" }) +
+    " " + d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) + " 조회";
+})();
+</script>

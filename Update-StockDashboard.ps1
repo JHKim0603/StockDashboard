@@ -156,4 +156,6 @@ $outPath = Join-Path $root "dashboard.html"
 Set-Content -Path $outPath -Value $output -Encoding UTF8
 
 Write-Host "Dashboard updated: $outPath"
-Start-Process $outPath
+if (-not $env:CI) {
+    Start-Process $outPath
+}

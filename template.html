@@ -332,6 +332,115 @@
     line-height: 1.6;
   }
 
+  .finance-row { padding-top: 12px; border-top: 1px solid var(--gridline); }
+  .finance-btn {
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-wash);
+    border: none;
+    border-radius: 8px;
+    padding: 7px 12px;
+    cursor: pointer;
+    width: 100%;
+    text-align: center;
+  }
+  .finance-btn:hover { filter: brightness(1.05); }
+  .finance-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 10;
+  }
+  .modal-overlay[hidden] { display: none; }
+  .modal-panel {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    max-width: 480px;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 20px 22px 22px;
+  }
+  .modal-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 4px;
+  }
+  .modal-head .name { font-size: 16px; font-weight: 650; }
+  .modal-head .unit { font-size: 11.5px; color: var(--ink-muted); margin-top: 2px; }
+  .modal-close {
+    font: inherit;
+    font-size: 18px;
+    line-height: 1;
+    color: var(--ink-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px 4px;
+    flex: none;
+  }
+  .modal-close:hover { color: var(--ink-primary); }
+  .finance-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 14px;
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .finance-table th, .finance-table td {
+    padding: 7px 6px;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .finance-table th:first-child, .finance-table td:first-child {
+    text-align: left;
+    color: var(--ink-secondary);
+    white-space: normal;
+  }
+  .finance-table thead th {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    border-bottom: 1px solid var(--gridline);
+  }
+  .finance-table thead th .est-badge {
+    display: inline-block;
+    margin-left: 3px;
+    font-size: 9.5px;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-wash);
+    border-radius: 4px;
+    padding: 1px 4px;
+    vertical-align: middle;
+  }
+  .finance-table tbody tr + tr td { border-top: 1px solid var(--gridline); }
+  .finance-table tbody td.est { color: var(--accent); }
+  .modal-summary {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--gridline);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--ink-secondary);
+  }
+  .modal-source {
+    margin-top: 14px;
+    font-size: 11px;
+    color: var(--ink-muted);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .spark-tooltip { transition: none; }
   }
@@ -350,9 +459,23 @@
 
   <p class="footnote">
     * 시세 출처: Yahoo Finance 무료 API(최대 15~20분 지연 가능). 최근 이슈는 Google 뉴스 검색 상위 기사의 원문 제목이며
-    AI가 작성한 요약이 아닙니다. 투자 판단의 참고용으로만 사용하세요 — 개인 용도 조회입니다.
+    AI가 작성한 요약이 아닙니다. 실적 데이터 출처: 네이버 증권(증권사 컨센서스 포함, 종목별로 컨센서스 제공 여부가 다를 수 있음).
+    투자 판단의 참고용으로만 사용하세요 — 개인 용도 조회입니다.
     레버리지·인버스 상품은 일간 수익률을 추종하므로 장기 보유 시 실제 누적 수익률이 기초자산과 크게 달라질 수 있습니다.
   </p>
+
+  <div class="modal-overlay" id="finance-modal" hidden>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="finance-modal-name">
+      <div class="modal-head">
+        <div>
+          <div class="name" id="finance-modal-name"></div>
+          <div class="unit" id="finance-modal-unit"></div>
+        </div>
+        <button type="button" class="modal-close" id="finance-modal-close" aria-label="닫기">✕</button>
+      </div>
+      <div id="finance-modal-body"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -440,7 +563,89 @@
 
     card.appendChild(buildNewsBlock(stock));
 
+    if (stock.finance) {
+      const financeRow = document.createElement("div");
+      financeRow.className = "finance-row";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "finance-btn";
+      btn.textContent = "실적 및 예상 실적 보기";
+      btn.addEventListener("click", () => openFinanceModal(stock));
+      financeRow.appendChild(btn);
+      card.appendChild(financeRow);
+    }
+
     return card;
+  }
+
+  function fmtFinanceValue(raw) {
+    if (raw === "-" || raw === null || raw === undefined) return "-";
+    const n = parseFloat(String(raw).replace(/,/g, ""));
+    if (Number.isNaN(n)) return raw;
+    return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  }
+
+  function openFinanceModal(stock) {
+    const modal = document.getElementById("finance-modal");
+    document.getElementById("finance-modal-name").textContent = stock.name + " 실적";
+    document.getElementById("finance-modal-unit").textContent = "단위: " + (stock.finance.unit || "-");
+
+    const body = document.getElementById("finance-modal-body");
+    body.innerHTML = "";
+
+    const table = document.createElement("table");
+    table.className = "finance-table";
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    headRow.appendChild(document.createElement("th"));
+    stock.finance.periods.forEach(p => {
+      const th = document.createElement("th");
+      th.textContent = p.label;
+      if (p.isEstimate) {
+        const badge = document.createElement("span");
+        badge.className = "est-badge";
+        badge.textContent = "E";
+        th.appendChild(badge);
+      }
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    stock.finance.rows.forEach(row => {
+      const tr = document.createElement("tr");
+      const th = document.createElement("td");
+      th.textContent = row.title;
+      tr.appendChild(th);
+      row.values.forEach((v, i) => {
+        const td = document.createElement("td");
+        td.textContent = fmtFinanceValue(v);
+        if (stock.finance.periods[i] && stock.finance.periods[i].isEstimate) td.classList.add("est");
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    body.appendChild(table);
+
+    if (stock.finance.summary) {
+      const summary = document.createElement("div");
+      summary.className = "modal-summary";
+      summary.textContent = stock.finance.summary;
+      body.appendChild(summary);
+    }
+
+    const source = document.createElement("div");
+    source.className = "modal-source";
+    source.textContent = "* \"E\" 표시 연도는 증권사 컨센서스(예상치)입니다. 자료: 네이버 증권.";
+    body.appendChild(source);
+
+    modal.hidden = false;
+  }
+
+  function closeFinanceModal() {
+    document.getElementById("finance-modal").hidden = true;
   }
 
   function buildNewsBlock(stock) {
@@ -690,6 +895,11 @@
   const grid = document.getElementById("card-grid");
   stocks.forEach(s => grid.appendChild(buildCard(s)));
   document.getElementById("stock-count").textContent = stocks.length;
+
+  const financeModal = document.getElementById("finance-modal");
+  document.getElementById("finance-modal-close").addEventListener("click", closeFinanceModal);
+  financeModal.addEventListener("click", (e) => { if (e.target === financeModal) closeFinanceModal(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !financeModal.hidden) closeFinanceModal(); });
 
   const d = new Date(fetchedAt);
   document.getElementById("updated-text").textContent =

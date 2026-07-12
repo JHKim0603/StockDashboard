@@ -13,14 +13,17 @@ $root = $PSScriptRoot
 #   NewsQuery   : what to search Google News for (use the underlying company name for derivative products)
 #   NewsLang    : "ko" or "en" — controls which Google News edition is queried
 #   IsIndex     : $true for market indices — suppresses the currency symbol and shows "지수" as the market chip
+#   FinanceMode : "domestic" (KRX, via m.stock.naver.com), "overseas" (via api.stock.naver.com,
+#                 needs the Reuters-style FinanceCode below), or $null to skip the 실적 popup (indices)
+#   FinanceCode : ticker code in the format each FinanceMode's API expects (see above)
 $tickers = @(
-    [PSCustomObject]@{ Symbol = "005930.KS"; DisplayName = "삼성전자";    MarketLabel = "KOSPI";  NewsQuery = "삼성전자";               NewsLang = "ko"; IsIndex = $false },
-    [PSCustomObject]@{ Symbol = "000660.KS"; DisplayName = "SK하이닉스";  MarketLabel = "KOSPI";  NewsQuery = "SK하이닉스";             NewsLang = "ko"; IsIndex = $false },
-    [PSCustomObject]@{ Symbol = "SNDK";      DisplayName = $null;        MarketLabel = "NASDAQ"; NewsQuery = "SanDisk SNDK stock";    NewsLang = "en"; IsIndex = $false },
-    [PSCustomObject]@{ Symbol = "MU";        DisplayName = $null;        MarketLabel = "NASDAQ"; NewsQuery = "Micron Technology MU stock"; NewsLang = "en"; IsIndex = $false },
-    [PSCustomObject]@{ Symbol = "^IXIC";     DisplayName = "나스닥";      MarketLabel = "지수";    NewsQuery = "Nasdaq Composite index"; NewsLang = "en"; IsIndex = $true },
-    [PSCustomObject]@{ Symbol = "^GSPC";     DisplayName = "S&P 500";    MarketLabel = "지수";    NewsQuery = "S&P 500 index";          NewsLang = "en"; IsIndex = $true },
-    [PSCustomObject]@{ Symbol = "^KS11";     DisplayName = "KOSPI";      MarketLabel = "지수";    NewsQuery = "코스피 지수";             NewsLang = "ko"; IsIndex = $true }
+    [PSCustomObject]@{ Symbol = "005930.KS"; DisplayName = "삼성전자";    MarketLabel = "KOSPI";  NewsQuery = "삼성전자";               NewsLang = "ko"; IsIndex = $false; FinanceMode = "domestic"; FinanceCode = "005930" },
+    [PSCustomObject]@{ Symbol = "000660.KS"; DisplayName = "SK하이닉스";  MarketLabel = "KOSPI";  NewsQuery = "SK하이닉스";             NewsLang = "ko"; IsIndex = $false; FinanceMode = "domestic"; FinanceCode = "000660" },
+    [PSCustomObject]@{ Symbol = "SNDK";      DisplayName = $null;        MarketLabel = "NASDAQ"; NewsQuery = "SanDisk SNDK stock";    NewsLang = "en"; IsIndex = $false; FinanceMode = "overseas"; FinanceCode = "SNDK.O" },
+    [PSCustomObject]@{ Symbol = "MU";        DisplayName = $null;        MarketLabel = "NASDAQ"; NewsQuery = "Micron Technology MU stock"; NewsLang = "en"; IsIndex = $false; FinanceMode = "overseas"; FinanceCode = "MU.O" },
+    [PSCustomObject]@{ Symbol = "^IXIC";     DisplayName = "나스닥";      MarketLabel = "지수";    NewsQuery = "Nasdaq Composite index"; NewsLang = "en"; IsIndex = $true;  FinanceMode = $null;      FinanceCode = $null },
+    [PSCustomObject]@{ Symbol = "^GSPC";     DisplayName = "S&P 500";    MarketLabel = "지수";    NewsQuery = "S&P 500 index";          NewsLang = "en"; IsIndex = $true;  FinanceMode = $null;      FinanceCode = $null },
+    [PSCustomObject]@{ Symbol = "^KS11";     DisplayName = "KOSPI";      MarketLabel = "지수";    NewsQuery = "코스피 지수";             NewsLang = "ko"; IsIndex = $true;  FinanceMode = $null;      FinanceCode = $null }
 )
 
 $currencySymbols = @{ KRW = "₩"; USD = "$"; }
@@ -59,6 +62,60 @@ function Get-NewsHeadlines {
     } catch {
         Write-Warning "News fetch failed for '$query': $($_.Exception.Message)"
         @()
+    }
+}
+
+function Get-FinanceSnapshot {
+    param($mode, $code)
+
+    if (-not $mode -or -not $code) { return $null }
+
+    try {
+        if ($mode -eq "domestic") {
+            $uri = "https://m.stock.naver.com/api/stock/$code/finance/annual"
+            $resp = Invoke-RestMethod -Uri $uri -Headers $headers
+            $fi = $resp.financeInfo
+            if (-not $fi -or -not $fi.trTitleList -or $fi.trTitleList.Count -eq 0) { return $null }
+            $periods = $fi.trTitleList
+            $rows = $fi.rowList
+            $summaryParts = @($resp.corporationSummary.comment1, $resp.corporationSummary.comment2) | Where-Object { $_ }
+            $summary = if ($summaryParts) { $summaryParts -join " " } else { $null }
+            $unit = "억원"
+        } else {
+            $uri = "https://api.stock.naver.com/stock/$code/finance/annual"
+            $resp = Invoke-RestMethod -Uri $uri -Headers $headers
+            if (-not $resp.trTitleList -or $resp.trTitleList.Count -eq 0) { return $null }
+            $periods = $resp.trTitleList
+            $rows = $resp.rowList
+            $summary = $null
+            $unit = $resp.unit
+        }
+
+        $wantedTitles = @("매출액", "영업이익", "EBIT", "당기순이익", "EPS")
+        $orderedPeriods = @($periods | Sort-Object key)
+
+        $rowsOut = foreach ($rowTitle in $wantedTitles) {
+            $row = $rows | Where-Object { $_.title -eq $rowTitle } | Select-Object -First 1
+            if (-not $row) { continue }
+            [PSCustomObject]@{
+                title  = if ($rowTitle -eq "EBIT") { "영업이익(EBIT)" } else { $rowTitle }
+                values = @(foreach ($p in $orderedPeriods) {
+                    $col = $row.columns.($p.key)
+                    if ($col -and $col.value) { $col.value } else { "-" }
+                })
+            }
+        }
+        if (-not $rowsOut) { return $null }
+
+        [PSCustomObject]@{
+            unit    = $unit
+            periods = @($orderedPeriods | ForEach-Object { [PSCustomObject]@{ label = $_.title; isEstimate = ($_.isConsensus -eq "Y") } })
+            rows    = @($rowsOut)
+            summary = $summary
+        }
+    } catch {
+        Write-Warning "Finance fetch failed for '$code' ($mode): $($_.Exception.Message)"
+        $null
     }
 }
 
@@ -123,6 +180,7 @@ function Get-StockSnapshot {
 
     $newsQuery = if ($cfg.NewsQuery) { $cfg.NewsQuery } else { $name }
     $news = Get-NewsHeadlines -query $newsQuery -lang $cfg.NewsLang
+    $finance = Get-FinanceSnapshot -mode $cfg.FinanceMode -code $cfg.FinanceCode
 
     [PSCustomObject]@{
         name      = $name
@@ -136,6 +194,7 @@ function Get-StockSnapshot {
         rangeHigh = $rangeHigh
         summary   = $summary
         news      = $news
+        finance   = $finance
     }
 }
 
@@ -146,7 +205,7 @@ $stocks = foreach ($t in $tickers) {
     Start-Sleep -Milliseconds 400  # be gentle with Yahoo's unofficial endpoint across 7 tickers
 }
 
-$stocksJson = ConvertTo-Json -InputObject @($stocks) -Depth 6
+$stocksJson = ConvertTo-Json -InputObject @($stocks) -Depth 8
 $fetchedAt = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ss")
 
 $template = Get-Content -Path (Join-Path $root "template.html") -Raw -Encoding UTF8

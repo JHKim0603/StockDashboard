@@ -84,6 +84,11 @@ function Get-StockSnapshot {
     $fullSeries = @($pairs.Close)
     $fullDates  = @($pairs.Date)
 
+    # Yahoo's meta.fiftyTwoWeekHigh/Low occasionally comes back as 0 for some tickers;
+    # fall back to the min/max of the fetched 1y series so we never divide by zero.
+    $rangeHigh = if ($meta.fiftyTwoWeekHigh -and $meta.fiftyTwoWeekHigh -gt 0) { $meta.fiftyTwoWeekHigh } else { ($fullSeries | Measure-Object -Maximum).Maximum }
+    $rangeLow  = if ($meta.fiftyTwoWeekLow  -and $meta.fiftyTwoWeekLow  -gt 0) { $meta.fiftyTwoWeekLow }  else { ($fullSeries | Measure-Object -Minimum).Minimum }
+
     # trailing-20-session stats for the auto-summary sentence (independent of the chart's own zoom range)
     $recent = $pairs | Select-Object -Last 20
     $rSeries = @($recent.Close)
@@ -97,8 +102,8 @@ function Get-StockSnapshot {
         elseif ($rSeries[$i] -lt $rSeries[$i - 1]) { $downDays++ }
     }
 
-    $pctFromHigh = (($lastVal - $meta.fiftyTwoWeekHigh) / $meta.fiftyTwoWeekHigh) * 100
-    $pctFromLow  = (($lastVal - $meta.fiftyTwoWeekLow)  / $meta.fiftyTwoWeekLow)  * 100
+    $pctFromHigh = (($lastVal - $rangeHigh) / $rangeHigh) * 100
+    $pctFromLow  = (($lastVal - $rangeLow)  / $rangeLow)  * 100
 
     $periodSign = if ($periodPct -ge 0) { "+" } else { "" }
     $lowSign    = if ($pctFromLow -ge 0) { "+" } else { "" }
@@ -127,8 +132,8 @@ function Get-StockSnapshot {
         series    = $fullSeries
         dates     = $fullDates
         volume    = $meta.regularMarketVolume
-        rangeLow  = $meta.fiftyTwoWeekLow
-        rangeHigh = $meta.fiftyTwoWeekHigh
+        rangeLow  = $rangeLow
+        rangeHigh = $rangeHigh
         summary   = $summary
         news      = $news
     }

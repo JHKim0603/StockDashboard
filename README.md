@@ -4,11 +4,14 @@ Local stock-summary dashboard. No backend, no build step — just PowerShell + a
 
 ## Files
 
-- `Update-StockDashboard.ps1` — fetches live quotes (Yahoo Finance chart API, no key) and recent
-  headlines (Google News RSS, no key) for the tickers listed near the top of the script, then
-  renders `template.html` into `dashboard.html`.
-- `template.html` — the dashboard UI: per-card 1M/3M/6M/1Y range toggle, sparkline with hover
-  tooltip, a "최근 이슈" news list (real article titles/links, not AI-written summaries).
+- `Update-StockDashboard.ps1` — fetches live quotes (Yahoo Finance chart API, no key), recent
+  headlines (Google News RSS, no key), quarterly financials + analyst consensus (Naver Finance,
+  no key) for the tickers listed in `watchlist.json`, then renders `template.html` into
+  `dashboard.html`.
+- `watchlist.json` — the ticker list. Only `"Symbol"` is required.
+- `template.html` — the dashboard UI: per-card 1M/3M/6M/1Y range toggle + 20/60일 이동평균선,
+  sparkline with hover tooltip, a "최근 이슈" news list (real article titles/links, not
+  AI-written summaries), 실적/목표주가 popups, portfolio P&L tracker (localStorage only).
 - `run.bat` — double-click launcher (bypasses PowerShell execution-policy prompts).
 - `dashboard.html` — generated output, opened automatically after each run. Not tracked in git.
 
@@ -20,7 +23,23 @@ Double-click `run.bat`, or:
 powershell -ExecutionPolicy Bypass -File Update-StockDashboard.ps1
 ```
 
-To change tracked tickers, edit the `$tickers` array at the top of `Update-StockDashboard.ps1`.
+### Adding a ticker
+
+Add a line to `watchlist.json` — only `Symbol` is required, e.g.:
+
+```json
+{ "Symbol": "AAPL" }
+```
+
+Everything else (display name, market label, news search term, 실적/목표주가 source) is
+auto-derived from the symbol: `.KS` → KOSPI, `.KQ` → KOSDAQ, `^` prefix → index, anything else
+is assumed NASDAQ. Add an explicit `"DisplayName"`, `"NewsQuery"`, `"MarketLabel"`, or
+`"FinanceCode"` in the same entry to override any of those. NYSE tickers need an explicit
+`"FinanceCode": "SYMBOL.N"` since the auto-default assumes NASDAQ (`SYMBOL.O`).
+
+Browser-side "add a ticker from the dashboard" isn't possible — Yahoo Finance and Naver's APIs
+both block direct cross-origin requests from a browser (CORS), which is why this project fetches
+data with a PowerShell script instead of client-side JS in the first place.
 
 ## Notes
 

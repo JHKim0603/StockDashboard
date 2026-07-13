@@ -8,23 +8,55 @@
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 
-# Add/remove tickers here.
-#   DisplayName : optional, leave $null to use the exchange's long name
-#   NewsQuery   : what to search Google News for (use the underlying company name for derivative products)
-#   NewsLang    : "ko" or "en" — controls which Google News edition is queried
-#   IsIndex     : $true for market indices — suppresses the currency symbol and shows "지수" as the market chip
-#   FinanceMode : "domestic" (KRX, via m.stock.naver.com), "overseas" (via api.stock.naver.com,
-#                 needs the Reuters-style FinanceCode below), or $null to skip the 실적 popup (indices)
-#   FinanceCode : ticker code in the format each FinanceMode's API expects (see above)
-$tickers = @(
-    [PSCustomObject]@{ Symbol = "005930.KS"; DisplayName = "삼성전자";    MarketLabel = "KOSPI";  NewsQuery = "삼성전자";               NewsLang = "ko"; IsIndex = $false; FinanceMode = "domestic"; FinanceCode = "005930" },
-    [PSCustomObject]@{ Symbol = "000660.KS"; DisplayName = "SK하이닉스";  MarketLabel = "KOSPI";  NewsQuery = "SK하이닉스";             NewsLang = "ko"; IsIndex = $false; FinanceMode = "domestic"; FinanceCode = "000660" },
-    [PSCustomObject]@{ Symbol = "SNDK";      DisplayName = $null;        MarketLabel = "NASDAQ"; NewsQuery = "SanDisk SNDK stock";    NewsLang = "en"; IsIndex = $false; FinanceMode = "overseas"; FinanceCode = "SNDK.O" },
-    [PSCustomObject]@{ Symbol = "MU";        DisplayName = $null;        MarketLabel = "NASDAQ"; NewsQuery = "Micron Technology MU stock"; NewsLang = "en"; IsIndex = $false; FinanceMode = "overseas"; FinanceCode = "MU.O" },
-    [PSCustomObject]@{ Symbol = "^IXIC";     DisplayName = "나스닥";      MarketLabel = "지수";    NewsQuery = "Nasdaq Composite index"; NewsLang = "en"; IsIndex = $true;  FinanceMode = $null;      FinanceCode = $null },
-    [PSCustomObject]@{ Symbol = "^GSPC";     DisplayName = "S&P 500";    MarketLabel = "지수";    NewsQuery = "S&P 500 index";          NewsLang = "en"; IsIndex = $true;  FinanceMode = $null;      FinanceCode = $null },
-    [PSCustomObject]@{ Symbol = "^KS11";     DisplayName = "KOSPI";      MarketLabel = "지수";    NewsQuery = "코스피 지수";             NewsLang = "ko"; IsIndex = $true;  FinanceMode = $null;      FinanceCode = $null }
-)
+# Tickers live in watchlist.json, not here — only "Symbol" is required, e.g. { "Symbol": "AAPL" }.
+# Everything else (DisplayName, MarketLabel, NewsQuery, NewsLang, FinanceMode/Code) is optional and
+# auto-derived from the symbol below; set any of them explicitly in watchlist.json to override.
+#   Symbol suffix convention: ".KS" = KOSPI, ".KQ" = KOSDAQ, "^" prefix = index, anything else = NASDAQ
+#   (NYSE tickers need an explicit "FinanceCode": "SYMBOL.N" override — the auto-default assumes NASDAQ)
+function Resolve-TickerConfig {
+    param($raw)
+
+    $symbol = $raw.Symbol
+    if (-not $symbol) { throw "watchlist.json 항목에 Symbol이 없습니다: $($raw | ConvertTo-Json -Compress)" }
+
+    $isIndex = if ($null -ne $raw.IsIndex) { [bool]$raw.IsIndex } else { $symbol.StartsWith("^") }
+    $isDomestic = $symbol.EndsWith(".KS") -or $symbol.EndsWith(".KQ")
+
+    $marketLabel =
+        if ($raw.MarketLabel) { $raw.MarketLabel }
+        elseif ($isIndex) { "지수" }
+        elseif ($symbol.EndsWith(".KS")) { "KOSPI" }
+        elseif ($symbol.EndsWith(".KQ")) { "KOSDAQ" }
+        else { "NASDAQ" }
+
+    $newsLang = if ($raw.NewsLang) { $raw.NewsLang } elseif ($isDomestic) { "ko" } else { "en" }
+
+    $financeMode =
+        if ($raw.FinanceMode) { $raw.FinanceMode }
+        elseif ($isIndex) { $null }
+        elseif ($isDomestic) { "domestic" }
+        else { "overseas" }
+
+    $financeCode =
+        if ($raw.FinanceCode) { $raw.FinanceCode }
+        elseif ($financeMode -eq "domestic") { $symbol -replace '\.KS$|\.KQ$', '' }
+        elseif ($financeMode -eq "overseas") { "$symbol.O" }
+        else { $null }
+
+    [PSCustomObject]@{
+        Symbol      = $symbol
+        DisplayName = $raw.DisplayName
+        MarketLabel = $marketLabel
+        NewsQuery   = $raw.NewsQuery
+        NewsLang    = $newsLang
+        IsIndex     = $isIndex
+        FinanceMode = $financeMode
+        FinanceCode = $financeCode
+    }
+}
+
+$watchlistRaw = Get-Content -Path (Join-Path $root "watchlist.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+$tickers = @($watchlistRaw | ForEach-Object { Resolve-TickerConfig $_ })
 
 $currencySymbols = @{ KRW = "₩"; USD = "$"; }
 $newsLocales = @{
@@ -160,7 +192,12 @@ function Get-ConsensusSnapshot {
                 $researchUri = "https://m.stock.naver.com/api/research/stock/$code"
                 $researchResp = Invoke-RestMethod -Uri $researchUri -Headers $headers
                 $reports = @($researchResp | Select-Object -First 6 | ForEach-Object {
-                    [PSCustomObject]@{ broker = $_.brokerName; title = $_.title; date = $_.writeDate }
+                    [PSCustomObject]@{
+                        broker = $_.brokerName
+                        title  = $_.title
+                        date   = $_.writeDate
+                        link   = "https://finance.naver.com/research/company_read.naver?nid=$($_.researchId)"
+                    }
                 })
             } catch {
                 Write-Warning "Research list fetch failed for '$code': $($_.Exception.Message)"

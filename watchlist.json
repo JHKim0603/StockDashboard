@@ -1,0 +1,9 @@
+[
+  { "Symbol": "005930.KS", "DisplayName": "삼성전자", "NewsQuery": "삼성전자" },
+  { "Symbol": "000660.KS", "DisplayName": "SK하이닉스", "NewsQuery": "SK하이닉스" },
+  { "Symbol": "SNDK", "NewsQuery": "SanDisk SNDK stock" },
+  { "Symbol": "MU", "NewsQuery": "Micron Technology MU stock" },
+  { "Symbol": "^IXIC", "DisplayName": "나스닥", "NewsQuery": "Nasdaq Composite index" },
+  { "Symbol": "^GSPC", "DisplayName": "S&P 500", "NewsQuery": "S&P 500 index" },
+  { "Symbol": "^KS11", "DisplayName": "KOSPI", "NewsQuery": "코스피 지수" }
+]

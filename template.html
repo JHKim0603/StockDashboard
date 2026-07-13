@@ -114,6 +114,38 @@
     background: var(--good);
     flex: none;
   }
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .fx-pill {
+    font-size: 12px;
+    color: var(--ink-secondary);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .theme-toggle {
+    font: inherit;
+    font-size: 15px;
+    line-height: 1;
+    color: var(--ink-secondary);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .theme-toggle:hover { color: var(--ink-primary); }
+  .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   .grid {
     max-width: 1120px;
@@ -294,6 +326,62 @@
     font-variant-numeric: tabular-nums;
     margin-left: 4px;
   }
+  .meta-row .val.up   { color: var(--good); }
+  .meta-row .val.down { color: var(--bad); }
+
+  .next-earnings {
+    font-size: 11.5px;
+    color: var(--ink-muted);
+    text-align: center;
+    margin-top: 6px;
+  }
+
+  .portfolio-row {
+    padding-top: 12px;
+    border-top: 1px solid var(--gridline);
+  }
+  .portfolio-label {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 8px;
+  }
+  .portfolio-inputs {
+    display: flex;
+    gap: 8px;
+  }
+  .portfolio-inputs label {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 11px;
+    color: var(--ink-muted);
+  }
+  .portfolio-inputs input {
+    font: inherit;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-primary);
+    background: var(--page);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 8px;
+    width: 100%;
+  }
+  .portfolio-inputs input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .portfolio-result {
+    margin-top: 10px;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .portfolio-result .pnl { font-weight: 650; font-variant-numeric: tabular-nums; }
+  .portfolio-result .pnl.up   { color: var(--good); }
+  .portfolio-result .pnl.down { color: var(--bad); }
 
   .news-block { padding-top: 12px; border-top: 1px solid var(--gridline); }
   .news-label {
@@ -452,14 +540,19 @@
       <h1>주식 요약 대시보드</h1>
       <div class="sub">관심 종목 <span id="stock-count"></span>건 · Yahoo Finance 실시간(지연) 시세 · Google 뉴스 최근 이슈</div>
     </div>
-    <div class="updated-pill"><span class="dot"></span><span id="updated-text">불러오는 중…</span></div>
+    <div class="topbar-right">
+      <div class="fx-pill" id="fx-pill" hidden></div>
+      <div class="updated-pill"><span class="dot"></span><span id="updated-text">불러오는 중…</span></div>
+      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="화면 모드 전환" title="화면 모드 전환"></button>
+    </div>
   </div>
 
   <div class="grid" id="card-grid"></div>
 
   <p class="footnote">
     * 시세 출처: Yahoo Finance 무료 API(최대 15~20분 지연 가능). 최근 이슈는 Google 뉴스 검색 상위 기사의 원문 제목이며
-    AI가 작성한 요약이 아닙니다. 실적 데이터 출처: 네이버 증권(증권사 컨센서스 포함, 종목별로 컨센서스 제공 여부가 다를 수 있음).
+    AI가 작성한 요약이 아닙니다. 실적·목표주가·환율 데이터 출처: 네이버 증권 / Yahoo Finance(증권사 컨센서스 포함, 종목별로 제공 여부가 다를 수 있음).
+    "내 보유 현황"에 입력한 수량·평단가는 서버로 전송되지 않고 이 브라우저에만 저장됩니다(다른 기기·브라우저와 공유되지 않음).
     투자 판단의 참고용으로만 사용하세요 — 개인 용도 조회입니다.
     레버리지·인버스 상품은 일간 수익률을 추종하므로 장기 보유 시 실제 누적 수익률이 기초자산과 크게 달라질 수 있습니다.
   </p>
@@ -481,7 +574,9 @@
 <script>
 (function () {
   const stocks = __STOCKS_JSON__;
+  const usdKrw = __USDKRW_JSON__;
   const fetchedAt = "__FETCHED_AT__";
+  const PORTFOLIO_KEY = "stockDashboardPortfolio";
   const RANGES = [
     { key: "1M", label: "1개월", days: 22 },
     { key: "3M", label: "3개월", days: 64 },
@@ -559,6 +654,20 @@
       '<div>52주 범위<span class="val"></span></div>';
     meta.querySelectorAll(".val")[0].textContent = fmtCompact(stock.volume);
     meta.querySelectorAll(".val")[1].textContent = stock.currency + fmtNum(stock.rangeLow, stock.currency) + " – " + stock.currency + fmtNum(stock.rangeHigh, stock.currency);
+
+    if (stock.consensus && stock.consensus.targetPrice) {
+      const upside = ((stock.consensus.targetPrice - last) / last) * 100;
+      const up = upside >= 0;
+      const item = document.createElement("div");
+      item.textContent = "목표주가";
+      const val = document.createElement("span");
+      val.className = "val " + (up ? "up" : "down");
+      val.textContent = stock.currency + fmtNum(stock.consensus.targetPrice, stock.currency) +
+        " (" + (up ? "+" : "") + upside.toFixed(1) + "%)";
+      item.appendChild(val);
+      meta.appendChild(item);
+    }
+
     card.appendChild(meta);
 
     card.appendChild(buildNewsBlock(stock));
@@ -572,10 +681,90 @@
       btn.textContent = "실적 및 예상 실적 보기";
       btn.addEventListener("click", () => openFinanceModal(stock));
       financeRow.appendChild(btn);
+      if (stock.finance.nextEstimateLabel) {
+        const nextEl = document.createElement("div");
+        nextEl.className = "next-earnings";
+        nextEl.textContent = "다음 실적 발표 예정 분기: " + stock.finance.nextEstimateLabel + " (증권사 컨센서스 기준)";
+        financeRow.appendChild(nextEl);
+      }
       card.appendChild(financeRow);
     }
 
+    card.appendChild(buildPortfolioBlock(stock, last));
+
     return card;
+  }
+
+  function loadPortfolio() {
+    try { return JSON.parse(localStorage.getItem(PORTFOLIO_KEY)) || {}; } catch (e) { return {}; }
+  }
+
+  function savePortfolio(data) {
+    try { localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(data)); } catch (e) { /* localStorage unavailable */ }
+  }
+
+  function buildPortfolioBlock(stock, lastPrice) {
+    const block = document.createElement("div");
+    block.className = "portfolio-row";
+    const label = document.createElement("div");
+    label.className = "portfolio-label";
+    label.textContent = "내 보유 현황 (이 브라우저에만 저장됨)";
+    block.appendChild(label);
+
+    const inputs = document.createElement("div");
+    inputs.className = "portfolio-inputs";
+    inputs.innerHTML =
+      '<label>수량<input type="number" min="0" step="any" inputmode="decimal" class="qty-input"></label>' +
+      '<label>평단가(' + stock.currency + ')<input type="number" min="0" step="any" inputmode="decimal" class="avg-input"></label>';
+    block.appendChild(inputs);
+
+    const result = document.createElement("div");
+    result.className = "portfolio-result";
+    result.hidden = true;
+    block.appendChild(result);
+
+    const qtyInput = inputs.querySelector(".qty-input");
+    const avgInput = inputs.querySelector(".avg-input");
+
+    const saved = loadPortfolio()[stock.symbol];
+    if (saved) {
+      if (saved.qty) qtyInput.value = saved.qty;
+      if (saved.avg) avgInput.value = saved.avg;
+    }
+
+    function render() {
+      const qty = parseFloat(qtyInput.value);
+      const avg = parseFloat(avgInput.value);
+
+      const data = loadPortfolio();
+      if (qty > 0 || avg > 0) {
+        data[stock.symbol] = { qty: qtyInput.value, avg: avgInput.value };
+      } else {
+        delete data[stock.symbol];
+      }
+      savePortfolio(data);
+
+      if (!(qty > 0) || !(avg > 0)) {
+        result.hidden = true;
+        return;
+      }
+      const value = qty * lastPrice;
+      const cost = qty * avg;
+      const pnl = value - cost;
+      const pnlPct = (pnl / cost) * 100;
+      const up = pnl >= 0;
+      result.hidden = false;
+      result.innerHTML =
+        '<span>평가금액 ' + stock.currency + fmtNum(value, stock.currency) + '</span>' +
+        '<span class="pnl ' + (up ? "up" : "down") + '">' + (up ? "+" : "") + stock.currency + fmtNum(pnl, stock.currency) +
+        ' (' + (up ? "+" : "") + pnlPct.toFixed(1) + '%)</span>';
+    }
+
+    qtyInput.addEventListener("input", render);
+    avgInput.addEventListener("input", render);
+    render();
+
+    return block;
   }
 
   function fmtFinanceValue(raw) {
@@ -900,6 +1089,30 @@
   document.getElementById("finance-modal-close").addEventListener("click", closeFinanceModal);
   financeModal.addEventListener("click", (e) => { if (e.target === financeModal) closeFinanceModal(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !financeModal.hidden) closeFinanceModal(); });
+
+  if (usdKrw) {
+    const fxPill = document.getElementById("fx-pill");
+    fxPill.hidden = false;
+    fxPill.textContent = "USD/KRW " + usdKrw.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  const THEME_KEY = "stockDashboardTheme";
+  const themeBtn = document.getElementById("theme-toggle");
+  function applyTheme(theme) {
+    if (theme) document.documentElement.setAttribute("data-theme", theme);
+    else document.documentElement.removeAttribute("data-theme");
+    const isDark = theme ? theme === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    themeBtn.textContent = isDark ? "☀" : "☾";
+  }
+  const savedTheme = (function () { try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; } })();
+  applyTheme(savedTheme);
+  themeBtn.addEventListener("click", () => {
+    const current = document.documentElement.getAttribute("data-theme") ||
+      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const next = current === "dark" ? "light" : "dark";
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* localStorage unavailable */ }
+    applyTheme(next);
+  });
 
   const d = new Date(fetchedAt);
   document.getElementById("updated-text").textContent =

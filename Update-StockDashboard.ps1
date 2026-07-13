@@ -124,14 +124,40 @@ function Get-FinanceSnapshot {
             [PSCustomObject]@{ label = $p.title; isEstimate = $isEstimate }
         }
 
+        $nextEstimateLabel = ($periodsOut | Where-Object { $_.isEstimate } | Select-Object -Last 1).label
+
         [PSCustomObject]@{
-            unit    = $unit
-            periods = @($periodsOut)
-            rows    = @($rowsOut)
-            summary = $summary
+            unit              = $unit
+            periods           = @($periodsOut)
+            rows              = @($rowsOut)
+            summary           = $summary
+            nextEstimateLabel = $nextEstimateLabel
         }
     } catch {
         Write-Warning "Finance fetch failed for '$code' ($mode): $($_.Exception.Message)"
+        $null
+    }
+}
+
+function Get-ConsensusSnapshot {
+    param($mode, $code)
+
+    if (-not $mode -or -not $code) { return $null }
+
+    try {
+        $uri = if ($mode -eq "domestic") { "https://m.stock.naver.com/api/stock/$code/integration" } else { "https://api.stock.naver.com/stock/$code/integration" }
+        $resp = Invoke-RestMethod -Uri $uri -Headers $headers
+        $ci = $resp.consensusInfo
+        if (-not $ci -or -not $ci.priceTargetMean) { return $null }
+
+        [PSCustomObject]@{
+            targetPrice = [double]($ci.priceTargetMean -replace ',', '')
+            targetHigh  = if ($ci.priceTargetHigh) { [double]($ci.priceTargetHigh -replace ',', '') } else { $null }
+            targetLow   = if ($ci.priceTargetLow)  { [double]($ci.priceTargetLow  -replace ',', '') } else { $null }
+            asOf        = $ci.createDate
+        }
+    } catch {
+        Write-Warning "Consensus fetch failed for '$code' ($mode): $($_.Exception.Message)"
         $null
     }
 }
@@ -198,9 +224,11 @@ function Get-StockSnapshot {
     $newsQuery = if ($cfg.NewsQuery) { $cfg.NewsQuery } else { $name }
     $news = Get-NewsHeadlines -query $newsQuery -lang $cfg.NewsLang
     $finance = Get-FinanceSnapshot -mode $cfg.FinanceMode -code $cfg.FinanceCode
+    $consensus = Get-ConsensusSnapshot -mode $cfg.FinanceMode -code $cfg.FinanceCode
 
     [PSCustomObject]@{
         name      = $name
+        symbol    = $cfg.Symbol
         ticker    = "$($cfg.Symbol) · $($cfg.MarketLabel)"
         market    = $market
         currency  = $currency
@@ -212,7 +240,17 @@ function Get-StockSnapshot {
         summary   = $summary
         news      = $news
         finance   = $finance
+        consensus = $consensus
     }
+}
+
+Write-Host "Fetching USD/KRW exchange rate..."
+$usdKrw = $null
+try {
+    $fxResp = Invoke-RestMethod -Uri "https://query1.finance.yahoo.com/v8/finance/chart/KRW=X?interval=1d&range=5d" -Headers $headers
+    $usdKrw = [math]::Round([double]$fxResp.chart.result[0].meta.regularMarketPrice, 2)
+} catch {
+    Write-Warning "Exchange rate fetch failed: $($_.Exception.Message)"
 }
 
 Write-Host "Fetching live quotes and headlines..."
@@ -223,10 +261,11 @@ $stocks = foreach ($t in $tickers) {
 }
 
 $stocksJson = ConvertTo-Json -InputObject @($stocks) -Depth 8
+$usdKrwJson = ConvertTo-Json -InputObject $usdKrw
 $fetchedAt = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ss")
 
 $template = Get-Content -Path (Join-Path $root "template.html") -Raw -Encoding UTF8
-$output = $template.Replace("__STOCKS_JSON__", $stocksJson).Replace("__FETCHED_AT__", $fetchedAt)
+$output = $template.Replace("__STOCKS_JSON__", $stocksJson).Replace("__USDKRW_JSON__", $usdKrwJson).Replace("__FETCHED_AT__", $fetchedAt)
 
 $outPath = Join-Path $root "dashboard.html"
 Set-Content -Path $outPath -Value $output -Encoding UTF8

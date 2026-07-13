@@ -236,6 +236,18 @@
   .delta-pill.up   { color: var(--good); background: var(--good-wash); }
   .delta-pill.down { color: var(--bad);  background: var(--bad-wash); }
 
+  .cross-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 4px 9px;
+    cursor: help;
+  }
+  .cross-badge.golden { color: var(--good); background: var(--good-wash); }
+  .cross-badge.dead    { color: var(--bad);  background: var(--bad-wash); }
+
   .chart-block { display: flex; flex-direction: column; gap: 6px; }
 
   .chart-legend {
@@ -761,6 +773,22 @@
     return out;
   }
 
+  // Looks for an actual golden/dead cross event (MA_SHORT crossing MA_LONG) within the last
+  // `lookback` trading days — not just "which is on top right now", which would flag every
+  // day of an existing trend instead of the moment it started.
+  function detectCross(ma20, ma60, lookback = 5) {
+    const diffs = [];
+    for (let i = ma20.length - 1; i >= 0 && diffs.length < lookback + 1; i--) {
+      if (ma20[i] === null || ma60[i] === null) break;
+      diffs.unshift(ma20[i] - ma60[i]);
+    }
+    for (let i = 1; i < diffs.length; i++) {
+      if (diffs[i - 1] <= 0 && diffs[i] > 0) return "golden";
+      if (diffs[i - 1] >= 0 && diffs[i] < 0) return "dead";
+    }
+    return null;
+  }
+
   // MA arrays can start with nulls (not enough preceding history yet, e.g. the
   // first ~59 days of a 1Y view for a 60-day average) — skip those by starting
   // a new subpath, rather than drawing a misleading line from/to zero.
@@ -828,6 +856,18 @@
     deltaEl.textContent = (up ? "▲ " : "▼ ") + (up ? "+" : "") + fmtNum(diff, stock.currency) + " (" + (up ? "+" : "") + pct.toFixed(2) + "%)";
     priceRow.appendChild(priceEl);
     priceRow.appendChild(deltaEl);
+
+    const cross = detectCross(computeMA(s, MA_SHORT), computeMA(s, MA_LONG));
+    if (cross) {
+      const crossEl = document.createElement("div");
+      crossEl.className = "cross-badge " + cross;
+      crossEl.textContent = cross === "golden" ? "골든크로스" : "데드크로스";
+      crossEl.title = cross === "golden"
+        ? MA_SHORT + "일선이 " + MA_LONG + "일선을 최근 상향 돌파 — 흔히 매수 신호로 해석됩니다."
+        : MA_SHORT + "일선이 " + MA_LONG + "일선을 최근 하향 돌파 — 흔히 매도 신호로 해석됩니다.";
+      priceRow.appendChild(crossEl);
+    }
+
     card.appendChild(priceRow);
 
     card.appendChild(buildChartBlock(stock));

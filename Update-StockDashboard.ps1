@@ -348,6 +348,41 @@ function Get-StockSnapshot {
     }
 }
 
+# Korea has no DST, so UTC+9 is always correct — avoids TimeZoneInfo id mismatches between
+# Windows PowerShell 5.1 locally ("Korea Standard Time") and pwsh on the Linux Actions runner
+# ("Asia/Seoul"), which previously left $fetchedAt on raw runner-local time (UTC in CI).
+$nowKst = (Get-Date).ToUniversalTime().AddHours(9)
+
+function Get-MovingAverage {
+    param($series, $window)
+    $out = New-Object 'object[]' $series.Count
+    $sum = 0.0
+    for ($i = 0; $i -lt $series.Count; $i++) {
+        $sum += $series[$i]
+        if ($i -ge $window) { $sum -= $series[$i - $window] }
+        $out[$i] = if ($i -ge $window - 1) { $sum / $window } else { $null }
+    }
+    $out
+}
+
+function Get-CrossSignal {
+    # Mirrors the dashboard's own detectCross() in template.html — same MA windows, same
+    # 5-day lookback for an actual sign-flip event, not just "which MA is on top now".
+    param($series, $lookback = 5)
+    $ma20 = Get-MovingAverage -series $series -window 20
+    $ma60 = Get-MovingAverage -series $series -window 60
+    $diffs = [System.Collections.ArrayList]@()
+    for ($i = $series.Count - 1; $i -ge 0 -and $diffs.Count -lt ($lookback + 1); $i--) {
+        if ($null -eq $ma20[$i] -or $null -eq $ma60[$i]) { break }
+        [void]$diffs.Insert(0, ($ma20[$i] - $ma60[$i]))
+    }
+    for ($i = 1; $i -lt $diffs.Count; $i++) {
+        if ($diffs[$i - 1] -le 0 -and $diffs[$i] -gt 0) { return "golden" }
+        if ($diffs[$i - 1] -ge 0 -and $diffs[$i] -lt 0) { return "dead" }
+    }
+    return $null
+}
+
 Write-Host "Fetching USD/KRW exchange rate..."
 $usdKrw = $null
 try {
@@ -366,7 +401,7 @@ $stocks = foreach ($t in $tickers) {
 
 $stocksJson = ConvertTo-Json -InputObject @($stocks) -Depth 8
 $usdKrwJson = ConvertTo-Json -InputObject $usdKrw
-$fetchedAt = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ss")
+$fetchedAt = $nowKst.ToString("yyyy-MM-ddTHH:mm:ss") + "+09:00"  # $nowKst's DateTimeKind is still Utc after the manual +9h shift, so "zzz" would report +00:00 — append the known-fixed KST offset literally instead.
 
 $template = Get-Content -Path (Join-Path $root "template.html") -Raw -Encoding UTF8
 $output = $template.Replace("__STOCKS_JSON__", $stocksJson).Replace("__USDKRW_JSON__", $usdKrwJson).Replace("__FETCHED_AT__", $fetchedAt)
@@ -378,3 +413,77 @@ Write-Host "Dashboard updated: $outPath"
 if (-not $env:CI) {
     Start-Process $outPath
 }
+
+# --- Email summary -----------------------------------------------------------------
+# Generates email-summary.html + email-subject.txt every run (harmless, useful for local
+# preview) — actually SENDING the email is a separate step, done only by the GitHub Actions
+# workflow, so testing locally never spams the inbox.
+Write-Host "Building email summary..."
+
+$dayNames = @("일", "월", "화", "수", "목", "금", "토")
+$emailDateStr = "{0}년 {1}월 {2}일 ({3})" -f $nowKst.Year, $nowKst.Month, $nowKst.Day, $dayNames[[int]$nowKst.DayOfWeek]
+
+$rowsHtml = foreach ($s in $stocks) {
+    $last = $s.series[-1]
+    $prev = $s.series[-2]
+    $diff = $last - $prev
+    $pct = if ($prev -ne 0) { ($diff / $prev) * 100 } else { 0 }
+    $up = $diff -ge 0
+    $color = if ($up) { "#0ca30c" } else { "#e34948" }
+    $arrow = if ($up) { "▲" } else { "▼" }
+    $priceFmt = if ($s.currency -eq "₩") { "{0:N0}" -f $last } else { "{0:N2}" -f $last }
+
+    $cross = Get-CrossSignal -series $s.series
+    $crossTag =
+        if ($cross -eq "golden") { " <span style='color:#0ca30c;font-weight:700;'>[골든크로스]</span>" }
+        elseif ($cross -eq "dead") { " <span style='color:#e34948;font-weight:700;'>[데드크로스]</span>" }
+        else { "" }
+
+    $newsHtml = ""
+    if ($s.news -and $s.news.Count -gt 0) {
+        $newsLines = foreach ($n in ($s.news | Select-Object -First 2)) {
+            "<div style='font-size:12px;color:#52514e;margin-top:3px;'>· <a href='$($n.link)' style='color:#2a78d6;text-decoration:none;'>$($n.title)</a></div>"
+        }
+        $newsHtml = $newsLines -join ""
+    }
+
+    @"
+<tr>
+  <td style="padding:10px 12px;border-bottom:1px solid #e1e0d9;">
+    <div style="font-weight:600;font-size:13px;color:#0b0b0b;">$($s.name)$crossTag</div>
+    <div style="font-size:11px;color:#898781;">$($s.ticker)</div>
+    $newsHtml
+  </td>
+  <td style="padding:10px 12px;border-bottom:1px solid #e1e0d9;text-align:right;white-space:nowrap;vertical-align:top;">
+    <div style="font-weight:650;font-size:14px;color:#0b0b0b;">$($s.currency)$priceFmt</div>
+    <div style="font-size:12px;font-weight:600;color:$color;">$arrow $([math]::Abs($pct).ToString("N2"))%</div>
+  </td>
+</tr>
+"@
+}
+
+$fxLine = if ($usdKrw) { " · USD/KRW $($usdKrw.ToString('N2'))" } else { "" }
+
+$emailHtml = @"
+<!DOCTYPE html>
+<html><body style="margin:0;padding:0;background:#f9f9f7;font-family:'Malgun Gothic',sans-serif;">
+<div style="max-width:600px;margin:0 auto;padding:24px 16px;">
+  <h2 style="margin:0 0 4px;color:#0b0b0b;">JH 투자 DASHBOARD</h2>
+  <div style="font-size:12px;color:#898781;margin-bottom:16px;">$emailDateStr 기준$fxLine</div>
+  <table style="width:100%;border-collapse:collapse;background:#ffffff;border:1px solid #e1e0d9;border-radius:8px;">
+    $($rowsHtml -join "`n")
+  </table>
+  <div style="margin-top:16px;font-size:11px;color:#898781;line-height:1.6;">
+    시세 출처: Yahoo Finance. 뉴스 출처: Google 뉴스(영문 기사는 자동 번역). 투자 판단 참고용으로만 사용하세요 — 개인 용도 요약입니다.<br>
+    실적·목표주가·전체 차트 등 자세한 내용은 대시보드에서 확인하세요.
+  </div>
+</div>
+</body></html>
+"@
+
+# Set-Content -Encoding UTF8 writes a BOM, which would leak into the mail subject/body as a
+# stray character in some clients — write both files BOM-less instead.
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText((Join-Path $root "email-summary.html"), $emailHtml, $utf8NoBom)
+[System.IO.File]::WriteAllText((Join-Path $root "email-subject.txt"), "JH 투자 DASHBOARD 요약 - $emailDateStr", $utf8NoBom)
+Write-Host "Email summary written: email-summary.html"

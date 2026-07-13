@@ -26,6 +26,22 @@ jobs:
         shell: pwsh
         run: ./Update-StockDashboard.ps1
 
+      - name: Read email subject
+        id: subject
+        run: echo "text=$(cat email-subject.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Send email summary
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.GMAIL_USERNAME }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: ${{ steps.subject.outputs.text }}
+          to: jhyupkim@unid.co.kr
+          from: JH 투자 DASHBOARD <${{ secrets.GMAIL_USERNAME }}>
+          html_body: file://email-summary.html
+
       - name: Prepare Pages content
         run: cp dashboard.html index.html
 

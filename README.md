@@ -14,6 +14,9 @@ Local stock-summary dashboard. No backend, no build step — just PowerShell + a
   AI-written summaries), 실적/목표주가 popups, portfolio P&L tracker (localStorage only).
 - `run.bat` — double-click launcher (bypasses PowerShell execution-policy prompts).
 - `dashboard.html` — generated output, opened automatically after each run. Not tracked in git.
+- `email-summary.html` / `email-subject.txt` — generated daily email body/subject (price + top
+  2 headlines per ticker, golden/dead cross tags). Written every run for local preview; actually
+  *sending* it only happens in the GitHub Actions workflow. Not tracked in git.
 
 ## Usage
 
@@ -46,5 +49,19 @@ data with a PowerShell script instead of client-side JS in the first place.
 - Requires only Windows PowerShell 5.1 — no Python/Node/npm.
 - `.ps1` files must stay saved as **UTF-8 with BOM**, or Windows PowerShell 5.1 misreads the
   Korean text and the ₩ sign and fails to parse the script.
-- Email automation (scheduled send) is not implemented yet — deferred until SMTP account and
-  send time are decided.
+
+## Email summary (GitHub Actions only)
+
+The daily workflow (`.github/workflows/update-dashboard.yml`) emails `email-summary.html` to
+`jhyupkim@unid.co.kr` via Gmail SMTP after each run. One-time setup, done outside this repo:
+
+1. On the sending Gmail account, turn on 2-Step Verification, then generate an App Password at
+   [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords).
+2. In the repo: **Settings → Secrets and variables → Actions → New repository secret**, add:
+   - `GMAIL_USERNAME` — the sending Gmail address
+   - `GMAIL_APP_PASSWORD` — the 16-character app password from step 1
+3. To change the recipient, edit the `to:` line in the workflow's "Send email summary" step.
+
+Local runs (`run.bat`) still generate `email-summary.html` for preview but never send it — only
+the Actions workflow has the secrets, and CI-only sending is intentional so testing locally
+doesn't spam the inbox.

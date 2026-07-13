@@ -65,6 +65,22 @@ $newsLocales = @{
 }
 $headers = @{ "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
 
+function Get-KoreanTranslation {
+    param($text)
+
+    try {
+        $uri = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ko&dt=t&q=" + [uri]::EscapeDataString($text)
+        $resp = Invoke-WebRequest -Uri $uri -Headers $headers -UseBasicParsing
+        $parsed = $resp.Content | ConvertFrom-Json
+        # Google splits long input into several segments under $parsed[0]; each segment's
+        # translated text is element [0] — join them back into one string.
+        (($parsed[0] | ForEach-Object { $_[0] }) -join "").Trim()
+    } catch {
+        Write-Warning "Translation failed for '$text': $($_.Exception.Message)"
+        $null
+    }
+}
+
 function Get-NewsHeadlines {
     param($query, $lang, $max = 4)
 
@@ -84,11 +100,20 @@ function Get-NewsHeadlines {
                 } else { break }
             }
             $pubDate = [System.DateTimeOffset]::Parse($it.pubDate)
+
+            $titleKo = $null
+            if ($lang -eq "en") {
+                $translated = Get-KoreanTranslation $title
+                if ($translated -and $translated -ne $title) { $titleKo = $translated }
+                Start-Sleep -Milliseconds 200  # be gentle with the unofficial translate endpoint
+            }
+
             [PSCustomObject]@{
-                title  = $title
-                source = $source
-                date   = $pubDate.ToString("yyyy-MM-dd")
-                link   = $it.link
+                title         = if ($titleKo) { $titleKo } else { $title }
+                titleOriginal = if ($titleKo) { $title } else { $null }
+                source        = $source
+                date          = $pubDate.ToString("yyyy-MM-dd")
+                link          = $it.link
             }
         })
     } catch {

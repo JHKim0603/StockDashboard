@@ -632,7 +632,9 @@
 
   <p class="footnote">
     * 시세 출처: Yahoo Finance 무료 API(최대 15~20분 지연 가능). 최근 이슈는 Google 뉴스 검색 상위 기사의 원문 제목이며
-    AI가 작성한 요약이 아닙니다. 실적·목표주가·환율 데이터 출처: 네이버 증권 / Yahoo Finance(증권사 컨센서스 포함, 종목별로 제공 여부가 다를 수 있음).
+    AI가 작성한 요약이 아닙니다. 미국 종목의 영문 기사 제목은 Google 번역으로 자동 번역되어 표시되며("번역됨" 표시, 마우스를 올리면 원문 확인 가능),
+    기계 번역이라 원문과 뉘앙스가 다를 수 있습니다 — 링크는 항상 영문 원문 기사로 연결됩니다.
+    실적·목표주가·환율 데이터 출처: 네이버 증권 / Yahoo Finance(증권사 컨센서스 포함, 종목별로 제공 여부가 다를 수 있음).
     "내 보유 현황"에 입력한 수량·평단가는 서버로 전송되지 않고 이 브라우저에만 저장됩니다(다른 기기·브라우저와 공유되지 않음).
     투자 판단의 참고용으로만 사용하세요 — 개인 용도 조회입니다.
     레버리지·인버스 상품은 일간 수익률을 추종하므로 장기 보유 시 실제 누적 수익률이 기초자산과 크게 달라질 수 있습니다.
@@ -1094,6 +1096,7 @@
       a.target = "_blank";
       a.rel = "noopener noreferrer";
       a.innerHTML = "";
+      if (item.titleOriginal) a.title = item.titleOriginal;
       const titleSpan = document.createElement("span");
       titleSpan.textContent = item.title;
       const arrow = document.createElement("span");
@@ -1103,7 +1106,9 @@
       a.appendChild(arrow);
       const metaSpan = document.createElement("span");
       metaSpan.className = "news-meta";
-      metaSpan.textContent = [item.source, item.date].filter(Boolean).join(" · ");
+      const metaParts = [item.source, item.date];
+      if (item.titleOriginal) metaParts.push("번역됨");
+      metaSpan.textContent = metaParts.filter(Boolean).join(" · ");
       a.appendChild(metaSpan);
       li.appendChild(a);
       list.appendChild(li);

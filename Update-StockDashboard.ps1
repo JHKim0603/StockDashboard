@@ -71,8 +71,10 @@ function Get-FinanceSnapshot {
     if (-not $mode -or -not $code) { return $null }
 
     try {
+        # Quarterly, not annual: annual periods are ~1 year apart and stale for most of the
+        # year; quarterly gives 5-6 recent reporting periods, which is what's actually useful here.
         if ($mode -eq "domestic") {
-            $uri = "https://m.stock.naver.com/api/stock/$code/finance/annual"
+            $uri = "https://m.stock.naver.com/api/stock/$code/finance/quarter"
             $resp = Invoke-RestMethod -Uri $uri -Headers $headers
             $fi = $resp.financeInfo
             if (-not $fi -or -not $fi.trTitleList -or $fi.trTitleList.Count -eq 0) { return $null }
@@ -82,7 +84,7 @@ function Get-FinanceSnapshot {
             $summary = if ($summaryParts) { $summaryParts -join " " } else { $null }
             $unit = "억원"
         } else {
-            $uri = "https://api.stock.naver.com/stock/$code/finance/annual"
+            $uri = "https://api.stock.naver.com/stock/$code/finance/quarter"
             $resp = Invoke-RestMethod -Uri $uri -Headers $headers
             if (-not $resp.trTitleList -or $resp.trTitleList.Count -eq 0) { return $null }
             $periods = $resp.trTitleList
@@ -93,6 +95,7 @@ function Get-FinanceSnapshot {
 
         $wantedTitles = @("매출액", "영업이익", "EBIT", "당기순이익", "EPS")
         $orderedPeriods = @($periods | Sort-Object key)
+        $today = Get-Date
 
         $rowsOut = foreach ($rowTitle in $wantedTitles) {
             $row = $rows | Where-Object { $_.title -eq $rowTitle } | Select-Object -First 1
@@ -107,9 +110,23 @@ function Get-FinanceSnapshot {
         }
         if (-not $rowsOut) { return $null }
 
+        $periodsOut = foreach ($p in $orderedPeriods) {
+            $isEstimate = $false
+            if ($mode -eq "domestic") {
+                # Domestic quarters flag consensus (not-yet-reported) periods explicitly and reliably.
+                $isEstimate = ($p.isConsensus -eq "Y")
+            } else {
+                # Overseas quarters don't set isConsensus reliably; a period whose end date hasn't
+                # happened yet is necessarily a forecast, so fall back to a date comparison.
+                [DateTime]$parsedEnd = Get-Date
+                if ([DateTime]::TryParse($p.key, [ref]$parsedEnd)) { $isEstimate = $parsedEnd -gt $today }
+            }
+            [PSCustomObject]@{ label = $p.title; isEstimate = $isEstimate }
+        }
+
         [PSCustomObject]@{
             unit    = $unit
-            periods = @($orderedPeriods | ForEach-Object { [PSCustomObject]@{ label = $_.title; isEstimate = ($_.isConsensus -eq "Y") } })
+            periods = @($periodsOut)
             rows    = @($rowsOut)
             summary = $summary
         }

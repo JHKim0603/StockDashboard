@@ -298,13 +298,31 @@ function Get-ConsensusSnapshot {
             }
         }
 
+        # 외국인/기관/개인 순매수 동향 — a KRX-only concept (no equivalent field in the overseas
+        # integration response), and it's already sitting in the same response as consensusInfo,
+        # so this is free once we're already calling this endpoint for the target price.
+        $flowTrend = $null
+        if ($mode -eq "domestic" -and $resp.dealTrendInfos) {
+            $flowTrend = @($resp.dealTrendInfos | ForEach-Object {
+                [PSCustomObject]@{
+                    date        = $_.bizdate -replace '^(\d{4})(\d{2})(\d{2})$', '$1-$2-$3'
+                    foreigner   = [long]($_.foreignerPureBuyQuant -replace '[+,]', '')
+                    institution = [long]($_.organPureBuyQuant -replace '[+,]', '')
+                    individual  = [long]($_.individualPureBuyQuant -replace '[+,]', '')
+                }
+            } | Sort-Object date)
+            $latestHoldRatio = $resp.dealTrendInfos[0].foreignerHoldRatio
+        }
+
         [PSCustomObject]@{
-            targetPrice = [double]($ci.priceTargetMean -replace ',', '')
-            targetHigh  = if ($ci.priceTargetHigh) { [double]($ci.priceTargetHigh -replace ',', '') } else { $null }
-            targetLow   = if ($ci.priceTargetLow)  { [double]($ci.priceTargetLow  -replace ',', '') } else { $null }
-            recommScore = if ($ci.recommMean) { [double]$ci.recommMean } else { $null }
-            asOf        = $ci.createDate
-            reports     = $reports
+            targetPrice      = [double]($ci.priceTargetMean -replace ',', '')
+            targetHigh       = if ($ci.priceTargetHigh) { [double]($ci.priceTargetHigh -replace ',', '') } else { $null }
+            targetLow        = if ($ci.priceTargetLow)  { [double]($ci.priceTargetLow  -replace ',', '') } else { $null }
+            recommScore      = if ($ci.recommMean) { [double]$ci.recommMean } else { $null }
+            asOf             = $ci.createDate
+            reports          = $reports
+            flowTrend        = $flowTrend
+            foreignHoldRatio = $latestHoldRatio
         }
     } catch {
         Write-Warning "Consensus fetch failed for '$code' ($mode): $($_.Exception.Message)"

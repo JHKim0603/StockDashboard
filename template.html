@@ -685,6 +685,37 @@
   .report-title .arrow { color: var(--ink-muted); margin-left: 3px; }
   .consensus-reports .report-meta { display: block; font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
 
+  .flow-trend-block {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--gridline);
+  }
+  .flow-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    /* Unstyled <table> elements get a UA-forced black text color that breaks inheritance from
+       dark-themed ancestors — see the 실적 table fix; same issue, same explicit-color fix. */
+    color: var(--ink-primary);
+  }
+  .flow-table th, .flow-table td {
+    padding: 6px 4px;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .flow-table th:first-child, .flow-table td:first-child { text-align: left; }
+  .flow-table thead th {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    border-bottom: 1px solid var(--gridline);
+  }
+  .flow-table tbody tr + tr td { border-top: 1px solid var(--gridline); }
+  .flow-table tbody td.up   { color: var(--good); }
+  .flow-table tbody td.down { color: var(--bad); }
+
   @media (prefers-reduced-motion: reduce) {
     .spark-tooltip { transition: none; }
   }
@@ -1306,6 +1337,10 @@
     }
     body.appendChild(reportsBlock);
 
+    if (c.flowTrend && c.flowTrend.length > 0) {
+      body.appendChild(buildFlowTrendBlock(c));
+    }
+
     const source = document.createElement("div");
     source.className = "modal-source";
     source.textContent = "* 개별 증권사가 각각 얼마를 목표주가로 제시했는지는 유료(FnGuide 등) 데이터라 공개되지 않습니다. " +
@@ -1317,6 +1352,54 @@
 
   function closeConsensusModal() {
     document.getElementById("consensus-modal").hidden = true;
+  }
+
+  function fmtShares(n) {
+    const sign = n >= 0 ? "+" : "";
+    const abs = Math.abs(n);
+    if (abs >= 1e4) return sign + (n / 1e4).toFixed(1) + "만주";
+    return sign + n.toLocaleString("en-US") + "주";
+  }
+
+  function buildFlowTrendBlock(c) {
+    const block = document.createElement("div");
+    block.className = "flow-trend-block";
+
+    const label = document.createElement("div");
+    label.className = "portfolio-label";
+    label.textContent = "최근 수급 동향 (외국인·기관·개인 순매수)" +
+      (c.foreignHoldRatio ? " — 외국인 보유비율 " + c.foreignHoldRatio : "");
+    block.appendChild(label);
+
+    const table = document.createElement("table");
+    table.className = "flow-table";
+    const thead = document.createElement("thead");
+    thead.innerHTML = "<tr><th>날짜</th><th>외국인</th><th>기관</th><th>개인</th></tr>";
+    table.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    c.flowTrend.forEach(f => {
+      const tr = document.createElement("tr");
+      const dateTd = document.createElement("td");
+      dateTd.textContent = f.date.slice(5).replace("-", "/");
+      tr.appendChild(dateTd);
+      [f.foreigner, f.institution, f.individual].forEach(v => {
+        const td = document.createElement("td");
+        td.textContent = fmtShares(v);
+        td.classList.add(v >= 0 ? "up" : "down");
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    block.appendChild(table);
+
+    const note = document.createElement("div");
+    note.className = "modal-source";
+    note.textContent = "* 순매수 수량 기준(+는 순매수, -는 순매도). 자료: 네이버 증권.";
+    block.appendChild(note);
+
+    return block;
   }
 
   function buildNewsBlock(stock) {

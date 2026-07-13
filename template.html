@@ -604,6 +604,12 @@
     justify-content: space-between;
     gap: 8px;
   }
+  .valuation-info {
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--ink-muted);
+    margin-top: 6px;
+  }
   .valuation-summary {
     font-size: 12.5px;
     color: var(--ink-secondary);
@@ -739,6 +745,10 @@
   const DEFAULT_RANGE = "1M";
   const MA_SHORT = 20;
   const MA_LONG = 60;
+  const VALUATION_METRIC_INFO = {
+    PER: "PER(주가수익비율) = 주가 ÷ 주당순이익(EPS). 지금 주가가 회사가 벌어들이는 이익의 몇 배인지를 나타내며, 낮을수록 이익 대비 주가가 저렴하다는 뜻입니다.",
+    PBR: "PBR(주가순자산비율) = 주가 ÷ 주당순자산(BPS). 지금 주가가 회사 장부상 순자산의 몇 배인지를 나타내며, 1배보다 낮으면 회사를 지금 청산해도 남는 자산 가치보다 싸게 거래된다는 뜻입니다."
+  };
 
   function computeMA(series, window) {
     const out = new Array(series.length).fill(null);
@@ -1040,12 +1050,17 @@
     head.appendChild(toggle);
     block.appendChild(head);
 
+    const info = document.createElement("div");
+    info.className = "valuation-info";
+    block.appendChild(info);
+
     const slot = document.createElement("div");
     block.appendChild(slot);
 
     let current = valuationList[0].metric;
 
     function render() {
+      info.textContent = VALUATION_METRIC_INFO[current] || "";
       slot.innerHTML = "";
       const val = valuationList.find(v => v.metric === current);
       slot.appendChild(buildValuationChart(val));

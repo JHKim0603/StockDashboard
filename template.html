@@ -533,6 +533,10 @@
     margin-top: 14px;
     font-size: 12.5px;
     font-variant-numeric: tabular-nums;
+    /* Chromium's UA stylesheet resets color on unstyled <table> elements (assumes a plain
+       white table background and forces black text for legibility against it), which breaks
+       inheritance from the dark-themed ancestors above. Set it explicitly to override that. */
+    color: var(--ink-primary);
   }
   .finance-table th, .finance-table td {
     padding: 7px 6px;

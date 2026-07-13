@@ -1131,11 +1131,13 @@
     const actualPoints = val.points.filter(p => p.value !== null && p.value !== undefined);
     const last = actualPoints[actualPoints.length - 1];
     const lastVsAvgPct = ((last.value - val.avg) / val.avg) * 100;
+    const unitLabel = val.isAnnual ? "개년" : "개 분기";
     const summary = document.createElement("div");
     summary.className = "valuation-summary";
     summary.innerHTML =
       "현재 " + val.metric + " <strong>" + last.value.toFixed(2) + "배</strong> — 최근 " + actualPoints.length +
-      "개 분기 평균(" + val.avg.toFixed(2) + "배) 대비 " + (lastVsAvgPct >= 0 ? "+" : "") + lastVsAvgPct.toFixed(1) + "%";
+      unitLabel + " 평균(" + val.avg.toFixed(2) + "배) 대비 " + (lastVsAvgPct >= 0 ? "+" : "") + lastVsAvgPct.toFixed(1) + "%" +
+      (val.isAnnual ? " <span style='color:var(--ink-muted);font-size:11px;'>(분기 PER 데이터 없어 연간 기준으로 표시)</span>" : "");
     wrap.appendChild(summary);
 
     const W = 400, H = 100, padL = 6, padR = 46, padY = 14;

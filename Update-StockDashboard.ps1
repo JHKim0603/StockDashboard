@@ -205,16 +205,62 @@ function Get-FinanceSnapshot {
             }
         }
 
+        $valuation = @($valuation)
+        if ($mode -eq "overseas" -and -not ($valuation | Where-Object { $_.metric -eq "PER" })) {
+            $annualPer = Get-AnnualPerFallback -code $code
+            if ($annualPer) { $valuation = @($annualPer) + $valuation }
+        }
+
         [PSCustomObject]@{
             unit              = $unit
             periods           = @($periodsOut)
             rows              = @($rowsOut)
             summary           = $summary
             nextEstimateLabel = $nextEstimateLabel
-            valuation         = @($valuation)
+            valuation         = $valuation
         }
     } catch {
         Write-Warning "Finance fetch failed for '$code' ($mode): $($_.Exception.Message)"
+        $null
+    }
+}
+
+function Get-AnnualPerFallback {
+    # Naver's overseas *quarterly* finance data never includes a PER row (only PBR) — but PER is
+    # sometimes present in the *annual* data for the same ticker (e.g. Micron), just with fewer,
+    # sparser points (some fiscal years are missing entirely when earnings were negative/undefined
+    # that year, which is also why some tickers like SanDisk have no usable PER anywhere at all).
+    param($code)
+
+    try {
+        $uri = "https://api.stock.naver.com/stock/$code/finance/annual"
+        $resp = Invoke-RestMethod -Uri $uri -Headers $headers
+        if (-not $resp.trTitleList -or $resp.trTitleList.Count -eq 0) { return $null }
+        $row = $resp.rowList | Where-Object { $_.title -eq "PER" } | Select-Object -First 1
+        if (-not $row) { return $null }
+
+        $orderedPeriods = @($resp.trTitleList | Sort-Object key)
+        $today = Get-Date
+        $points = foreach ($p in $orderedPeriods) {
+            $col = $row.columns.($p.key)
+            $val = if ($col -and $col.value -and $col.value -ne "-") { [double]($col.value -replace ',', '') } else { $null }
+            [DateTime]$parsedEnd = Get-Date
+            $isEstimate = if ([DateTime]::TryParse($p.key, [ref]$parsedEnd)) { $parsedEnd -gt $today } else { $false }
+            [PSCustomObject]@{ label = $p.title; isEstimate = $isEstimate; value = $val }
+        }
+        $actualValues = @($points | Where-Object { -not $_.isEstimate -and $null -ne $_.value } | ForEach-Object { $_.value })
+        if ($actualValues.Count -lt 2) { return $null }
+
+        [PSCustomObject]@{
+            metric   = "PER"
+            points   = @($points)
+            min      = ($actualValues | Measure-Object -Minimum).Minimum
+            max      = ($actualValues | Measure-Object -Maximum).Maximum
+            avg      = [math]::Round((($actualValues | Measure-Object -Average).Average), 2)
+            isAnnual = $true
+        }
+    } catch {
+        Write-Warning "Annual PER fallback failed for '$code': $($_.Exception.Message)"
         $null
     }
 }

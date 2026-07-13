@@ -150,11 +150,30 @@ function Get-ConsensusSnapshot {
         $ci = $resp.consensusInfo
         if (-not $ci -or -not $ci.priceTargetMean) { return $null }
 
+        # No free source publishes each brokerage's individual target price (that's paywalled
+        # FnGuide/WiseFn data) — the best available breakdown is the underlying report list
+        # (broker name + title + date) behind the consensus average. Domestic-only: Korean
+        # brokerages don't publish research on foreign-listed names like MU/SNDK.
+        $reports = $null
+        if ($mode -eq "domestic") {
+            try {
+                $researchUri = "https://m.stock.naver.com/api/research/stock/$code"
+                $researchResp = Invoke-RestMethod -Uri $researchUri -Headers $headers
+                $reports = @($researchResp | Select-Object -First 6 | ForEach-Object {
+                    [PSCustomObject]@{ broker = $_.brokerName; title = $_.title; date = $_.writeDate }
+                })
+            } catch {
+                Write-Warning "Research list fetch failed for '$code': $($_.Exception.Message)"
+            }
+        }
+
         [PSCustomObject]@{
             targetPrice = [double]($ci.priceTargetMean -replace ',', '')
             targetHigh  = if ($ci.priceTargetHigh) { [double]($ci.priceTargetHigh -replace ',', '') } else { $null }
             targetLow   = if ($ci.priceTargetLow)  { [double]($ci.priceTargetLow  -replace ',', '') } else { $null }
+            recommScore = if ($ci.recommMean) { [double]$ci.recommMean } else { $null }
             asOf        = $ci.createDate
+            reports     = $reports
         }
     } catch {
         Write-Warning "Consensus fetch failed for '$code' ($mode): $($_.Exception.Message)"

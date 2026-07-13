@@ -183,12 +183,35 @@ function Get-FinanceSnapshot {
 
         $nextEstimateLabel = ($periodsOut | Where-Object { $_.isEstimate } | Select-Object -Last 1).label
 
+        # Valuation band (PER/PBR trend + min/avg/max over the same quarters already fetched
+        # above — no extra request). Naver's overseas quarterly data only has PBR, not PER.
+        $valuation = foreach ($metric in @("PER", "PBR")) {
+            $row = $rows | Where-Object { $_.title -eq $metric } | Select-Object -First 1
+            if (-not $row) { continue }
+            $points = for ($i = 0; $i -lt $orderedPeriods.Count; $i++) {
+                $p = $orderedPeriods[$i]
+                $col = $row.columns.($p.key)
+                $val = if ($col -and $col.value -and $col.value -ne "-") { [double]($col.value -replace ',', '') } else { $null }
+                [PSCustomObject]@{ label = $p.title; isEstimate = $periodsOut[$i].isEstimate; value = $val }
+            }
+            $actualValues = @($points | Where-Object { -not $_.isEstimate -and $null -ne $_.value } | ForEach-Object { $_.value })
+            if ($actualValues.Count -lt 2) { continue }  # not enough history for a meaningful band
+            [PSCustomObject]@{
+                metric = $metric
+                points = @($points)
+                min    = ($actualValues | Measure-Object -Minimum).Minimum
+                max    = ($actualValues | Measure-Object -Maximum).Maximum
+                avg    = [math]::Round((($actualValues | Measure-Object -Average).Average), 2)
+            }
+        }
+
         [PSCustomObject]@{
             unit              = $unit
             periods           = @($periodsOut)
             rows              = @($rowsOut)
             summary           = $summary
             nextEstimateLabel = $nextEstimateLabel
+            valuation         = @($valuation)
         }
     } catch {
         Write-Warning "Finance fetch failed for '$code' ($mode): $($_.Exception.Message)"

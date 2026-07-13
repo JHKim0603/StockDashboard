@@ -463,9 +463,21 @@
   .footnote {
     max-width: 1120px;
     margin: 28px auto 0;
+    padding: 0;
+    list-style: none;
     font-size: 12px;
     color: var(--ink-muted);
     line-height: 1.6;
+  }
+  .footnote li {
+    padding-left: 14px;
+    position: relative;
+  }
+  .footnote li + li { margin-top: 4px; }
+  .footnote li::before {
+    content: "*";
+    position: absolute;
+    left: 0;
   }
 
   .finance-row { padding-top: 12px; border-top: 1px solid var(--gridline); }
@@ -581,6 +593,43 @@
     color: var(--ink-muted);
   }
 
+  .valuation-block {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--gridline);
+  }
+  .valuation-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .valuation-summary {
+    font-size: 12.5px;
+    color: var(--ink-secondary);
+    margin-top: 8px;
+  }
+  .valuation-summary strong { color: var(--ink-primary); }
+  .valuation-chart-wrap { display: flex; flex-direction: column; gap: 4px; }
+  .valuation-svg {
+    display: block;
+    width: 100%;
+    height: 110px;
+    margin-top: 4px;
+    overflow: visible;
+  }
+  .valuation-xaxis {
+    display: flex;
+    justify-content: space-between;
+    padding-right: 46px;
+  }
+  .valuation-xaxis span {
+    font-size: 9.5px;
+    color: var(--ink-muted);
+    white-space: nowrap;
+  }
+  .valuation-xaxis span.est { color: var(--accent); }
+
   .consensus-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
@@ -638,15 +687,15 @@
 
   <div class="grid" id="card-grid"></div>
 
-  <p class="footnote">
-    * 시세 출처: Yahoo Finance 무료 API(최대 15~20분 지연 가능). 최근 이슈는 Google 뉴스 검색 상위 기사의 원문 제목이며
-    AI가 작성한 요약이 아닙니다. 미국 종목의 영문 기사 제목은 Google 번역으로 자동 번역되어 표시되며("번역됨" 표시, 마우스를 올리면 원문 확인 가능),
-    기계 번역이라 원문과 뉘앙스가 다를 수 있습니다 — 링크는 항상 영문 원문 기사로 연결됩니다.
-    실적·목표주가·환율 데이터 출처: 네이버 증권 / Yahoo Finance(증권사 컨센서스 포함, 종목별로 제공 여부가 다를 수 있음).
-    "내 보유 현황"에 입력한 수량·평단가는 서버로 전송되지 않고 이 브라우저에만 저장됩니다(다른 기기·브라우저와 공유되지 않음).
-    투자 판단의 참고용으로만 사용하세요 — 개인 용도 조회입니다.
-    레버리지·인버스 상품은 일간 수익률을 추종하므로 장기 보유 시 실제 누적 수익률이 기초자산과 크게 달라질 수 있습니다.
-  </p>
+  <ul class="footnote">
+    <li>시세 출처: Yahoo Finance 무료 API(최대 15~20분 지연 가능).</li>
+    <li>최근 이슈는 Google 뉴스 검색 상위 기사의 원문 제목이며 AI가 작성한 요약이 아닙니다.</li>
+    <li>미국 종목의 영문 기사 제목은 Google 번역으로 자동 번역되어 표시되며("번역됨" 표시, 마우스를 올리면 원문 확인 가능), 기계 번역이라 원문과 뉘앙스가 다를 수 있습니다 — 링크는 항상 영문 원문 기사로 연결됩니다.</li>
+    <li>실적·목표주가·환율 데이터 출처: 네이버 증권 / Yahoo Finance(증권사 컨센서스 포함, 종목별로 제공 여부가 다를 수 있음).</li>
+    <li>"내 보유 현황"에 입력한 수량·평단가는 서버로 전송되지 않고 이 브라우저에만 저장됩니다(다른 기기·브라우저와 공유되지 않음).</li>
+    <li>투자 판단의 참고용으로만 사용하세요 — 개인 용도 조회입니다.</li>
+    <li>레버리지·인버스 상품은 일간 수익률을 추종하므로 장기 보유 시 실제 누적 수익률이 기초자산과 크게 달라질 수 있습니다.</li>
+  </ul>
 
   <div class="modal-overlay" id="finance-modal" hidden>
     <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="finance-modal-name">
@@ -952,6 +1001,10 @@
     table.appendChild(tbody);
     body.appendChild(table);
 
+    if (stock.finance.valuation && stock.finance.valuation.length > 0) {
+      body.appendChild(buildValuationBlock(stock.finance.valuation));
+    }
+
     if (stock.finance.summary) {
       const summary = document.createElement("div");
       summary.className = "modal-summary";
@@ -969,6 +1022,137 @@
 
   function closeFinanceModal() {
     document.getElementById("finance-modal").hidden = true;
+  }
+
+  function buildValuationBlock(valuationList) {
+    const block = document.createElement("div");
+    block.className = "valuation-block";
+
+    const head = document.createElement("div");
+    head.className = "valuation-head";
+    const title = document.createElement("div");
+    title.className = "portfolio-label";
+    title.textContent = "밸류에이션 추이";
+    head.appendChild(title);
+
+    const toggle = document.createElement("div");
+    toggle.className = "range-toggle";
+    head.appendChild(toggle);
+    block.appendChild(head);
+
+    const slot = document.createElement("div");
+    block.appendChild(slot);
+
+    let current = valuationList[0].metric;
+
+    function render() {
+      slot.innerHTML = "";
+      const val = valuationList.find(v => v.metric === current);
+      slot.appendChild(buildValuationChart(val));
+      toggle.querySelectorAll("button").forEach(b => {
+        b.classList.toggle("active", b.dataset.metric === current);
+      });
+    }
+
+    if (valuationList.length > 1) {
+      valuationList.forEach(v => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = v.metric;
+        btn.dataset.metric = v.metric;
+        btn.addEventListener("click", () => { current = v.metric; render(); });
+        toggle.appendChild(btn);
+      });
+    }
+
+    render();
+    return block;
+  }
+
+  function buildValuationChart(val) {
+    const wrap = document.createElement("div");
+    wrap.className = "valuation-chart-wrap";
+
+    const actualPoints = val.points.filter(p => p.value !== null && p.value !== undefined);
+    const last = actualPoints[actualPoints.length - 1];
+    const lastVsAvgPct = ((last.value - val.avg) / val.avg) * 100;
+    const summary = document.createElement("div");
+    summary.className = "valuation-summary";
+    summary.innerHTML =
+      "현재 " + val.metric + " <strong>" + last.value.toFixed(2) + "배</strong> — 최근 " + actualPoints.length +
+      "개 분기 평균(" + val.avg.toFixed(2) + "배) 대비 " + (lastVsAvgPct >= 0 ? "+" : "") + lastVsAvgPct.toFixed(1) + "%";
+    wrap.appendChild(summary);
+
+    const W = 400, H = 100, padL = 6, padR = 46, padY = 14;
+    const plotW = W - padL - padR;
+    const n = val.points.length;
+    const lo = Math.min(val.min, ...actualPoints.map(p => p.value));
+    const hi = Math.max(val.max, ...actualPoints.map(p => p.value));
+    const range = (hi - lo) || 1;
+    const x = i => padL + (n === 1 ? 0 : (i / (n - 1)) * plotW);
+    const y = v => padY + (1 - (v - lo) / (hi - lo || 1)) * (H - padY * 2);
+
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.classList.add("valuation-svg");
+
+    [["min", val.min], ["avg", val.avg], ["max", val.max]].forEach(([k, v]) => {
+      const gy = y(v);
+      const gl = document.createElementNS(svgNS, "line");
+      gl.setAttribute("x1", String(padL)); gl.setAttribute("x2", String(W - padR));
+      gl.setAttribute("y1", gy.toFixed(1)); gl.setAttribute("y2", gy.toFixed(1));
+      gl.setAttribute("stroke", "var(--gridline)");
+      gl.setAttribute("stroke-width", "1");
+      gl.setAttribute("stroke-dasharray", k === "avg" ? "3,3" : "none");
+      gl.setAttribute("vector-effect", "non-scaling-stroke");
+      svg.appendChild(gl);
+
+      const label = document.createElementNS(svgNS, "text");
+      label.setAttribute("x", String(W - padR + 4));
+      label.setAttribute("y", (gy + 3).toFixed(1));
+      label.setAttribute("font-size", "9");
+      label.setAttribute("fill", "var(--ink-muted)");
+      label.textContent = (k === "min" ? "최저 " : k === "max" ? "최고 " : "평균 ") + v.toFixed(1);
+      svg.appendChild(label);
+    });
+
+    const linePoints = actualPoints.map(p => [x(val.points.indexOf(p)), y(p.value)]);
+    const linePath = linePoints.map((p, i) => (i === 0 ? "M" : "L") + p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+    const line = document.createElementNS(svgNS, "path");
+    line.setAttribute("d", linePath);
+    line.setAttribute("fill", "none");
+    line.setAttribute("stroke", "var(--accent)");
+    line.setAttribute("stroke-width", "1.6");
+    line.setAttribute("stroke-linecap", "round");
+    line.setAttribute("stroke-linejoin", "round");
+    line.setAttribute("vector-effect", "non-scaling-stroke");
+    svg.appendChild(line);
+
+    linePoints.forEach((p, i) => {
+      const isLast = i === linePoints.length - 1;
+      const dot = document.createElementNS(svgNS, "circle");
+      dot.setAttribute("cx", p[0].toFixed(1));
+      dot.setAttribute("cy", p[1].toFixed(1));
+      dot.setAttribute("r", isLast ? "3.5" : "2.5");
+      dot.setAttribute("fill", "var(--accent)");
+      svg.appendChild(dot);
+    });
+
+    wrap.appendChild(svg);
+
+    const xAxis = document.createElement("div");
+    xAxis.className = "valuation-xaxis";
+    val.points.forEach(p => {
+      const span = document.createElement("span");
+      span.textContent = p.label.replace(/\.$/, "").slice(2);
+      if (p.isEstimate) span.classList.add("est");
+      xAxis.appendChild(span);
+    });
+    wrap.appendChild(xAxis);
+
+    return wrap;
   }
 
   function recommLabel(score) {

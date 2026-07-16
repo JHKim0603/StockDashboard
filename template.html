@@ -141,6 +141,18 @@
     padding: 6px 12px;
     font-variant-numeric: tabular-nums;
   }
+  .regen-link {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-wash);
+    border-radius: 999px;
+    padding: 6px 12px;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .regen-link:hover { filter: brightness(1.05); }
+  .regen-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .theme-toggle {
     font: inherit;
     font-size: 15px;
@@ -730,6 +742,8 @@
     <div class="topbar-right">
       <div class="fx-pill" id="fx-pill" hidden></div>
       <div class="updated-pill"><span class="dot"></span><span id="updated-text">불러오는 중…</span></div>
+      <a class="regen-link" href="https://github.com/JHKim0603/StockDashboard/actions/workflows/update-dashboard.yml" target="_blank" rel="noopener noreferrer" title="GitHub Actions에서 지금 바로 데이터 갱신을 실행합니다 (실행 후 1~2분 뒤 새로고침 버튼을 눌러주세요)">지금 갱신하기 ↗</a>
+      <button type="button" class="theme-toggle" id="refresh-btn" aria-label="새로고침" title="페이지를 새로고침해서 최신 생성 데이터를 다시 불러옵니다">⟳</button>
       <button type="button" class="theme-toggle" id="theme-toggle" aria-label="화면 모드 전환" title="화면 모드 전환"></button>
     </div>
   </div>
@@ -1704,6 +1718,13 @@
     fxPill.hidden = false;
     fxPill.textContent = "USD/KRW " + usdKrw.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
+
+  document.getElementById("refresh-btn").addEventListener("click", () => {
+    // A plain reload can be served from HTTP cache — append a cache-busting query param so
+    // it always re-fetches whatever the server currently has (useful right after manually
+    // triggering the GitHub Actions workflow via the "지금 갱신하기" link).
+    window.location.href = window.location.pathname + "?t=" + Date.now();
+  });
 
   const THEME_KEY = "stockDashboardTheme";
   const themeBtn = document.getElementById("theme-toggle");

@@ -473,8 +473,8 @@ function Get-MaTrendComment {
         if ($last -lt $a -and $a -lt $b -and $b -lt $c) { return @{ text = "역배열임, 하락추세임"; tone = "down" } }
     }
 
-    if ($a -gt $b) { return @{ text = "정배열은 아님, 단기 상승세임"; tone = "up" } }
-    if ($a -lt $b) { return @{ text = "역배열은 아님, 단기 하락세임"; tone = "down" } }
+    if ($a -gt $b) { return @{ text = "정배열은 아님, 단기 상승세"; tone = "up" } }
+    if ($a -lt $b) { return @{ text = "역배열은 아님, 단기 하락세"; tone = "down" } }
     return @{ text = "뚜렷한 추세 없음"; tone = $null }
 }
 

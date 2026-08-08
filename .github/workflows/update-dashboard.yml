@@ -2,7 +2,11 @@ name: Update Stock Dashboard
 
 on:
   schedule:
-    - cron: '30 23 * * *'  # 08:30 KST daily
+    # 08:30 KST, Tue-Sat mornings only. Cron runs on UTC, and KST is UTC+9, so this UTC Mon-Fri
+    # (1-5) window lands as KST Tue-Sat 08:30 — i.e. it skips the KST Sun/Mon morning sends,
+    # since those would just repeat Friday's close again (no trading happens Sat/Sun KST, and
+    # Monday's KST morning is still before that day's own market open).
+    - cron: '30 23 * * 1-5'
   workflow_dispatch: {}
 
 permissions:

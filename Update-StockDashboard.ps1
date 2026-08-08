@@ -459,7 +459,13 @@ try {
 Write-Host "Fetching live quotes and headlines..."
 $stocks = foreach ($t in $tickers) {
     Write-Host "  - $($t.Symbol)"
-    Get-StockSnapshot $t
+    try {
+        Get-StockSnapshot $t
+    } catch {
+        # One flaky ticker (Yahoo's unofficial endpoint is occasionally unreliable) must not take
+        # down the whole run — skip it and keep going, so the rest of the dashboard/email still ships.
+        Write-Warning "Skipping $($t.Symbol) - snapshot fetch failed: $($_.Exception.Message)"
+    }
     Start-Sleep -Milliseconds 400  # be gentle with Yahoo's unofficial endpoint across 7 tickers
 }
 

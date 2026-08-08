@@ -419,10 +419,6 @@
     margin-top: 6px;
   }
 
-  .portfolio-row {
-    padding-top: 12px;
-    border-top: 1px solid var(--gridline);
-  }
   .portfolio-label {
     font-size: 11px;
     letter-spacing: 0.06em;
@@ -430,41 +426,6 @@
     color: var(--ink-muted);
     margin-bottom: 8px;
   }
-  .portfolio-inputs {
-    display: flex;
-    gap: 8px;
-  }
-  .portfolio-inputs label {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    font-size: 11px;
-    color: var(--ink-muted);
-  }
-  .portfolio-inputs input {
-    font: inherit;
-    font-size: 13px;
-    font-variant-numeric: tabular-nums;
-    color: var(--ink-primary);
-    background: var(--page);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 6px 8px;
-    width: 100%;
-  }
-  .portfolio-inputs input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .portfolio-result {
-    margin-top: 10px;
-    font-size: 13px;
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 8px;
-  }
-  .portfolio-result .pnl { font-weight: 650; font-variant-numeric: tabular-nums; }
-  .portfolio-result .pnl.up   { color: var(--good); }
-  .portfolio-result .pnl.down { color: var(--bad); }
 
   .news-block { padding-top: 12px; border-top: 1px solid var(--gridline); }
   .news-label {
@@ -776,7 +737,6 @@
     <li>최근 이슈는 Google 뉴스 검색 상위 기사의 원문 제목이며 AI가 작성한 요약이 아닙니다.</li>
     <li>미국 종목의 영문 기사 제목은 Google 번역으로 자동 번역되어 표시되며("번역됨" 표시, 마우스를 올리면 원문 확인 가능), 기계 번역이라 원문과 뉘앙스가 다를 수 있습니다 — 링크는 항상 영문 원문 기사로 연결됩니다.</li>
     <li>실적·목표주가·환율 데이터 출처: 네이버 증권 / Yahoo Finance(증권사 컨센서스 포함, 종목별로 제공 여부가 다를 수 있음).</li>
-    <li>"내 보유 현황"에 입력한 수량·평단가는 서버로 전송되지 않고 이 브라우저에만 저장됩니다(다른 기기·브라우저와 공유되지 않음).</li>
     <li>투자 판단의 참고용으로만 사용하세요 — 개인 용도 조회입니다.</li>
     <li>레버리지·인버스 상품은 일간 수익률을 추종하므로 장기 보유 시 실제 누적 수익률이 기초자산과 크게 달라질 수 있습니다.</li>
   </ul>
@@ -813,7 +773,6 @@
   const stocks = __STOCKS_JSON__;
   const usdKrw = __USDKRW_JSON__;
   const fetchedAt = "__FETCHED_AT__";
-  const PORTFOLIO_KEY = "stockDashboardPortfolio";
   const RANGES = [
     { key: "1M", label: "1개월", days: 22 },
     { key: "3M", label: "3개월", days: 64 },
@@ -870,30 +829,30 @@
 
     const cross = detectCross(ma20, ma60);
     if (cross === "golden") {
-      return { text: "20일선이 60일선을 최근 상향 돌파했습니다(골든크로스) — 단기 상승 전환 신호로 해석됩니다.", tone: "up" };
+      return { text: "골든크로스임", tone: "up" };
     }
     if (cross === "dead") {
-      return { text: "20일선이 60일선을 최근 하향 돌파했습니다(데드크로스) — 단기 하락 전환 신호로 해석됩니다.", tone: "down" };
+      return { text: "데드크로스임", tone: "down" };
     }
 
     if (a === null || b === null) return null;  // not enough history yet for even the 20/60 pair
 
     if (c !== null) {
       if (last > a && a > b && b > c) {
-        return { text: "20일선 · 60일선 · 180일선이 정배열을 이루고 있어 중장기 상승 추세로 해석됩니다.", tone: "up" };
+        return { text: "정배열임", tone: "up" };
       }
       if (last < a && a < b && b < c) {
-        return { text: "20일선 · 60일선 · 180일선이 역배열을 이루고 있어 중장기 하락 추세로 해석됩니다.", tone: "down" };
+        return { text: "역배열임", tone: "down" };
       }
     }
 
     if (a > b) {
-      return { text: "20일선이 60일선 위에 있어 단기적으로 상승 흐름이 우세하지만, 뚜렷한 정배열은 아닙니다.", tone: "up" };
+      return { text: "정배열은 아님, 단기 상승세임", tone: "up" };
     }
     if (a < b) {
-      return { text: "20일선이 60일선 아래에 있어 단기적으로 하락 흐름이 우세하지만, 뚜렷한 역배열은 아닙니다.", tone: "down" };
+      return { text: "역배열은 아님, 단기 하락세임", tone: "down" };
     }
-    return { text: "이동평균선이 뒤섞여 있어 뚜렷한 추세 없이 횡보하는 모습입니다.", tone: null };
+    return { text: "뚜렷한 추세 없음", tone: null };
   }
 
   // MA arrays can start with nulls (not enough preceding history yet, e.g. the
@@ -1030,81 +989,7 @@
       card.appendChild(financeRow);
     }
 
-    card.appendChild(buildPortfolioBlock(stock, last));
-
     return card;
-  }
-
-  function loadPortfolio() {
-    try { return JSON.parse(localStorage.getItem(PORTFOLIO_KEY)) || {}; } catch (e) { return {}; }
-  }
-
-  function savePortfolio(data) {
-    try { localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(data)); } catch (e) { /* localStorage unavailable */ }
-  }
-
-  function buildPortfolioBlock(stock, lastPrice) {
-    const block = document.createElement("div");
-    block.className = "portfolio-row";
-    const label = document.createElement("div");
-    label.className = "portfolio-label";
-    label.textContent = "내 보유 현황 (이 브라우저에만 저장됨)";
-    block.appendChild(label);
-
-    const inputs = document.createElement("div");
-    inputs.className = "portfolio-inputs";
-    inputs.innerHTML =
-      '<label>수량<input type="number" min="0" step="any" inputmode="decimal" class="qty-input"></label>' +
-      '<label>평단가(' + stock.currency + ')<input type="number" min="0" step="any" inputmode="decimal" class="avg-input"></label>';
-    block.appendChild(inputs);
-
-    const result = document.createElement("div");
-    result.className = "portfolio-result";
-    result.hidden = true;
-    block.appendChild(result);
-
-    const qtyInput = inputs.querySelector(".qty-input");
-    const avgInput = inputs.querySelector(".avg-input");
-
-    const saved = loadPortfolio()[stock.symbol];
-    if (saved) {
-      if (saved.qty) qtyInput.value = saved.qty;
-      if (saved.avg) avgInput.value = saved.avg;
-    }
-
-    function render() {
-      const qty = parseFloat(qtyInput.value);
-      const avg = parseFloat(avgInput.value);
-
-      const data = loadPortfolio();
-      if (qty > 0 || avg > 0) {
-        data[stock.symbol] = { qty: qtyInput.value, avg: avgInput.value };
-      } else {
-        delete data[stock.symbol];
-      }
-      savePortfolio(data);
-
-      if (!(qty > 0) || !(avg > 0)) {
-        result.hidden = true;
-        return;
-      }
-      const value = qty * lastPrice;
-      const cost = qty * avg;
-      const pnl = value - cost;
-      const pnlPct = (pnl / cost) * 100;
-      const up = pnl >= 0;
-      result.hidden = false;
-      result.innerHTML =
-        '<span>평가금액 ' + stock.currency + fmtNum(value, stock.currency) + '</span>' +
-        '<span class="pnl ' + (up ? "up" : "down") + '">' + (up ? "+" : "") + stock.currency + fmtNum(pnl, stock.currency) +
-        ' (' + (up ? "+" : "") + pnlPct.toFixed(1) + '%)</span>';
-    }
-
-    qtyInput.addEventListener("input", render);
-    avgInput.addEventListener("input", render);
-    render();
-
-    return block;
   }
 
   function fmtFinanceValue(raw) {

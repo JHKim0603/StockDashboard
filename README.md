@@ -9,9 +9,10 @@ Local stock-summary dashboard. No backend, no build step — just PowerShell + a
   no key) for the tickers listed in `watchlist.json`, then renders `template.html` into
   `dashboard.html`.
 - `watchlist.json` — the ticker list. Only `"Symbol"` is required.
-- `template.html` — the dashboard UI: per-card 1M/3M/6M/1Y range toggle + 20/60일 이동평균선,
-  sparkline with hover tooltip, a "최근 이슈" news list (real article titles/links, not
-  AI-written summaries), 실적/목표주가 popups, portfolio P&L tracker (localStorage only).
+- `template.html` — the dashboard UI: per-card 1M/3M/6M/1Y range toggle + 20/60/180일 이동평균선
+  with a plain-language trend comment (cross event, 정배열/역배열), sparkline with hover tooltip,
+  a "최근 이슈" news list (real article titles/links, not AI-written summaries), 실적/목표주가
+  popups.
 - `run.bat` — double-click launcher (bypasses PowerShell execution-policy prompts).
 - `dashboard.html` — generated output, opened automatically after each run. Not tracked in git.
 - `email-summary.html` / `email-subject.txt` — generated daily email body/subject (price + top

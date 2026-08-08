@@ -829,20 +829,20 @@
 
     const cross = detectCross(ma20, ma60);
     if (cross === "golden") {
-      return { text: "골든크로스임", tone: "up" };
+      return { text: "골든크로스임, 상승전환임", tone: "up" };
     }
     if (cross === "dead") {
-      return { text: "데드크로스임", tone: "down" };
+      return { text: "데드크로스임, 하락전환임", tone: "down" };
     }
 
     if (a === null || b === null) return null;  // not enough history yet for even the 20/60 pair
 
     if (c !== null) {
       if (last > a && a > b && b > c) {
-        return { text: "정배열임", tone: "up" };
+        return { text: "정배열임, 상승추세임", tone: "up" };
       }
       if (last < a && a < b && b < c) {
-        return { text: "역배열임", tone: "down" };
+        return { text: "역배열임, 하락추세임", tone: "down" };
       }
     }
 

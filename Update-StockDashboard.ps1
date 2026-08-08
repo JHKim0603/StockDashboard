@@ -449,9 +449,27 @@ function Get-CrossSignal {
 
 Write-Host "Fetching USD/KRW exchange rate..."
 $usdKrw = $null
+$usdKrwSeries = $null
 try {
-    $fxResp = Invoke-RestMethod -Uri "https://query1.finance.yahoo.com/v8/finance/chart/KRW=X?interval=1d&range=5d" -Headers $headers
-    $usdKrw = [math]::Round([double]$fxResp.chart.result[0].meta.regularMarketPrice, 2)
+    # 1y range doubles as history for the FX trend chart, not just the topbar's latest value.
+    $fxResp = Invoke-RestMethod -Uri "https://query1.finance.yahoo.com/v8/finance/chart/KRW=X?interval=1d&range=1y" -Headers $headers
+    $fxResult = $fxResp.chart.result[0]
+    $usdKrw = [math]::Round([double]$fxResult.meta.regularMarketPrice, 2)
+
+    $fxCloses = $fxResult.indicators.quote[0].close
+    $fxTimestamps = $fxResult.timestamp
+    $fxPairs = for ($i = 0; $i -lt $fxCloses.Count; $i++) {
+        if ($null -ne $fxCloses[$i]) {
+            [PSCustomObject]@{
+                Date  = [DateTimeOffset]::FromUnixTimeSeconds($fxTimestamps[$i]).ToLocalTime().ToString("yyyy-MM-dd")
+                Close = [math]::Round([double]$fxCloses[$i], 2)
+            }
+        }
+    }
+    $usdKrwSeries = [PSCustomObject]@{
+        series = @($fxPairs.Close)
+        dates  = @($fxPairs.Date)
+    }
 } catch {
     Write-Warning "Exchange rate fetch failed: $($_.Exception.Message)"
 }
@@ -537,11 +555,12 @@ $stocks = foreach ($t in $tickers) {
 
 $stocksJson = ConvertTo-Json -InputObject @($stocks) -Depth 8
 $usdKrwJson = ConvertTo-Json -InputObject $usdKrw
+$usdKrwSeriesJson = ConvertTo-Json -InputObject $usdKrwSeries -Depth 4
 $fearGreedJson = ConvertTo-Json -InputObject $fearGreed
 $fetchedAt = $nowKst.ToString("yyyy-MM-ddTHH:mm:ss") + "+09:00"  # $nowKst's DateTimeKind is still Utc after the manual +9h shift, so "zzz" would report +00:00 — append the known-fixed KST offset literally instead.
 
 $template = Get-Content -Path (Join-Path $root "template.html") -Raw -Encoding UTF8
-$output = $template.Replace("__STOCKS_JSON__", $stocksJson).Replace("__USDKRW_JSON__", $usdKrwJson).Replace("__FEARGREED_JSON__", $fearGreedJson).Replace("__FETCHED_AT__", $fetchedAt)
+$output = $template.Replace("__STOCKS_JSON__", $stocksJson).Replace("__USDKRW_JSON__", $usdKrwJson).Replace("__USDKRW_SERIES_JSON__", $usdKrwSeriesJson).Replace("__FEARGREED_JSON__", $fearGreedJson).Replace("__FETCHED_AT__", $fetchedAt)
 
 $outPath = Join-Path $root "dashboard.html"
 Set-Content -Path $outPath -Value $output -Encoding UTF8

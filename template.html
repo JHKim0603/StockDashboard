@@ -137,6 +137,7 @@
     flex-wrap: wrap;
   }
   .fx-pill {
+    font: inherit;
     font-size: 12px;
     color: var(--ink-secondary);
     background: var(--surface);
@@ -144,7 +145,10 @@
     border-radius: 999px;
     padding: 6px 12px;
     font-variant-numeric: tabular-nums;
+    cursor: pointer;
   }
+  .fx-pill:hover { color: var(--ink-primary); border-color: var(--ink-muted); }
+  .fx-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .feargreed-pill {
     font: inherit;
     font-size: 12px;
@@ -775,7 +779,7 @@
       <div class="sub">관심 종목 <span id="stock-count"></span>건 · Yahoo Finance 실시간(지연) 시세 · Google 뉴스 최근 이슈</div>
     </div>
     <div class="topbar-right">
-      <div class="fx-pill" id="fx-pill" hidden></div>
+      <button type="button" class="fx-pill" id="fx-pill" hidden></button>
       <button type="button" class="feargreed-pill" id="feargreed-pill" hidden></button>
       <div class="updated-pill"><span class="dot"></span><span id="updated-text">불러오는 중…</span></div>
       <a class="regen-link" href="https://github.com/JHKim0603/StockDashboard/actions/workflows/update-dashboard.yml" target="_blank" rel="noopener noreferrer" title="GitHub Actions에서 지금 바로 데이터 갱신을 실행합니다 (실행 후 1~2분 뒤 새로고침 버튼을 눌러주세요)">지금 갱신하기 ↗</a>
@@ -834,12 +838,26 @@
       <div id="feargreed-modal-body"></div>
     </div>
   </div>
+
+  <div class="modal-overlay" id="fx-modal" hidden>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="fx-modal-name">
+      <div class="modal-head">
+        <div>
+          <div class="name" id="fx-modal-name">USD/KRW 환율</div>
+          <div class="unit">Yahoo Finance</div>
+        </div>
+        <button type="button" class="modal-close" id="fx-modal-close" aria-label="닫기">✕</button>
+      </div>
+      <div id="fx-modal-body"></div>
+    </div>
+  </div>
 </div>
 
 <script>
 (function () {
   const stocks = __STOCKS_JSON__;
   const usdKrw = __USDKRW_JSON__;
+  const usdKrwSeries = __USDKRW_SERIES_JSON__;
   const fearGreed = __FEARGREED_JSON__;
   const fetchedAt = "__FETCHED_AT__";
   const RANGES = [
@@ -1202,6 +1220,215 @@
 
   function closeFearGreedModal() {
     document.getElementById("feargreed-modal").hidden = true;
+  }
+
+  function openFxModal() {
+    const modal = document.getElementById("fx-modal");
+    const body = document.getElementById("fx-modal-body");
+    body.innerHTML = "";
+
+    const series = usdKrwSeries.series;
+    const last = series[series.length - 1];
+    const prev = series[series.length - 2];
+    const diff = last - prev;
+    const pct = (diff / prev) * 100;
+    const up = diff >= 0;
+
+    const scoreRow = document.createElement("div");
+    scoreRow.className = "fg-score-row";
+    scoreRow.innerHTML =
+      '<span class="fg-score">' + fmtNum(last, "") + '</span>' +
+      '<span class="fg-rating ' + (up ? "up" : "down") + '">' + (up ? "▲ " : "▼ ") + (up ? "+" : "") + fmtNum(diff, "") +
+      ' (' + (up ? "+" : "") + pct.toFixed(2) + '%)</span>';
+    body.appendChild(scoreRow);
+
+    const toggle = document.createElement("div");
+    toggle.className = "range-toggle";
+    const slot = document.createElement("div");
+    slot.className = "spark-slot";
+    let current = DEFAULT_RANGE;
+
+    function render() {
+      slot.innerHTML = "";
+      slot.appendChild(buildFxChart(usdKrwSeries, current));
+      toggle.querySelectorAll("button").forEach(b => {
+        b.classList.toggle("active", b.dataset.range === current);
+      });
+    }
+
+    RANGES.forEach(r => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = r.label;
+      btn.dataset.range = r.key;
+      btn.addEventListener("click", () => { current = r.key; render(); });
+      toggle.appendChild(btn);
+    });
+
+    body.appendChild(toggle);
+    body.appendChild(slot);
+    render();
+
+    modal.hidden = false;
+  }
+
+  function closeFxModal() {
+    document.getElementById("fx-modal").hidden = true;
+  }
+
+  // A trimmed-down variant of buildSparkline for a single plain series (no MA overlays, no
+  // currency symbol) — kept as its own function rather than generalizing buildSparkline further,
+  // matching how buildValuationChart already stands apart from it for the same reason.
+  function buildFxChart(fx, rangeKey) {
+    const days = RANGES.find(r => r.key === rangeKey).days;
+    const n0 = fx.series.length;
+    const count = days === Infinity ? n0 : Math.min(days, n0);
+    const data = fx.series.slice(n0 - count);
+    const dates = fx.dates.slice(n0 - count);
+
+    const chartWrap = document.createElement("div");
+    chartWrap.className = "chart-wrap";
+    const chartRow = document.createElement("div");
+    chartRow.className = "chart-row";
+    const yAxis = document.createElement("div");
+    yAxis.className = "y-axis";
+    const plotWrap = document.createElement("div");
+    plotWrap.className = "plot-wrap";
+    const xAxis = document.createElement("div");
+    xAxis.className = "x-axis";
+    chartRow.appendChild(yAxis);
+    chartRow.appendChild(plotWrap);
+    chartWrap.appendChild(chartRow);
+    chartWrap.appendChild(xAxis);
+
+    const W = 300, H = 64, pad = 7;
+    const n = data.length;
+    const min = Math.min(...data), max = Math.max(...data);
+    const mid = (min + max) / 2;
+    const range = (max - min) || 1;
+    const plotW = W - pad * 2;
+    const plotH = H - pad * 2;
+    const x = i => pad + (n === 1 ? 0 : (i / (n - 1)) * plotW);
+    const y = v => pad + (1 - (v - min) / range) * plotH;
+
+    const points = data.map((v, i) => [x(i), y(v)]);
+    const linePath = points.map((p, i) => (i === 0 ? "M" : "L") + p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+    const baseline = H - pad;
+    const areaPath = linePath + " L" + x(n - 1).toFixed(1) + "," + baseline + " L" + pad + "," + baseline + " Z";
+
+    const trendUp = data[data.length - 1] >= data[0];
+    const lineColor = trendUp ? "var(--good)" : "var(--bad)";
+
+    [max, mid, min].forEach(v => {
+      const label = document.createElement("span");
+      label.style.top = ((y(v) / H) * 100) + "%";
+      label.textContent = fmtAxisPrice(v, "");
+      yAxis.appendChild(label);
+    });
+
+    const xTickIdx = n > 2 ? [0, Math.floor((n - 1) / 2), n - 1] : [0, n - 1];
+    const xAnchor = xTickIdx.length === 3 ? ["start", "middle", "end"] : ["start", "end"];
+    xTickIdx.forEach((idx, k) => {
+      const label = document.createElement("span");
+      label.style.left = ((x(idx) / W) * 100) + "%";
+      label.style.transform =
+        xAnchor[k] === "middle" ? "translateX(-50%)" :
+        xAnchor[k] === "end" ? "translateX(-100%)" : "none";
+      label.textContent = fmtDateLabel(dates[idx]);
+      xAxis.appendChild(label);
+    });
+
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("preserveAspectRatio", "none");
+
+    [max, mid, min].forEach(v => {
+      const gy = y(v);
+      const gl = document.createElementNS(svgNS, "line");
+      gl.setAttribute("x1", String(pad)); gl.setAttribute("x2", String(W - pad));
+      gl.setAttribute("y1", gy.toFixed(1)); gl.setAttribute("y2", gy.toFixed(1));
+      gl.setAttribute("stroke", "var(--gridline)");
+      gl.setAttribute("stroke-width", "1");
+      gl.setAttribute("vector-effect", "non-scaling-stroke");
+      svg.appendChild(gl);
+    });
+
+    const area = document.createElementNS(svgNS, "path");
+    area.setAttribute("d", areaPath);
+    area.setAttribute("fill", lineColor);
+    area.setAttribute("opacity", "0.08");
+    area.setAttribute("stroke", "none");
+    svg.appendChild(area);
+
+    const line = document.createElementNS(svgNS, "path");
+    line.setAttribute("d", linePath);
+    line.setAttribute("fill", "none");
+    line.setAttribute("stroke", lineColor);
+    line.setAttribute("stroke-width", "2");
+    line.setAttribute("stroke-linecap", "round");
+    line.setAttribute("stroke-linejoin", "round");
+    line.setAttribute("vector-effect", "non-scaling-stroke");
+    svg.appendChild(line);
+
+    const last = points[n - 1];
+    const halo = document.createElementNS(svgNS, "circle");
+    halo.setAttribute("cx", last[0].toFixed(1)); halo.setAttribute("cy", last[1].toFixed(1));
+    halo.setAttribute("r", "6.5");
+    halo.setAttribute("fill", lineColor);
+    halo.setAttribute("opacity", "0.14");
+    svg.appendChild(halo);
+    const dot = document.createElementNS(svgNS, "circle");
+    dot.setAttribute("cx", last[0].toFixed(1)); dot.setAttribute("cy", last[1].toFixed(1));
+    dot.setAttribute("r", "3");
+    dot.setAttribute("fill", lineColor);
+    svg.appendChild(dot);
+
+    const crossLine = document.createElementNS(svgNS, "line");
+    crossLine.setAttribute("y1", String(pad)); crossLine.setAttribute("y2", String(baseline));
+    crossLine.setAttribute("stroke", "var(--ink-muted)");
+    crossLine.setAttribute("stroke-width", "1");
+    crossLine.setAttribute("stroke-dasharray", "2,2");
+    crossLine.setAttribute("opacity", "0");
+    crossLine.setAttribute("vector-effect", "non-scaling-stroke");
+    svg.appendChild(crossLine);
+
+    const crossDot = document.createElementNS(svgNS, "circle");
+    crossDot.setAttribute("r", "3.5");
+    crossDot.setAttribute("fill", "var(--surface)");
+    crossDot.setAttribute("stroke", lineColor);
+    crossDot.setAttribute("stroke-width", "2");
+    crossDot.setAttribute("opacity", "0");
+    svg.appendChild(crossDot);
+
+    const tooltip = document.createElement("div");
+    tooltip.className = "spark-tooltip";
+    plotWrap.appendChild(svg);
+    plotWrap.appendChild(tooltip);
+
+    plotWrap.addEventListener("mousemove", (e) => {
+      const rect = plotWrap.getBoundingClientRect();
+      const relX = ((e.clientX - rect.left) / rect.width) * W;
+      let idx = Math.round(((relX - pad) / plotW) * (n - 1));
+      idx = Math.max(0, Math.min(n - 1, idx));
+      const [px, py] = points[idx];
+      crossLine.setAttribute("x1", px.toFixed(1));
+      crossLine.setAttribute("x2", px.toFixed(1));
+      crossLine.setAttribute("opacity", "1");
+      crossDot.setAttribute("cx", px.toFixed(1));
+      crossDot.setAttribute("cy", py.toFixed(1));
+      crossDot.setAttribute("opacity", "1");
+      tooltip.innerHTML = '<span class="d">' + dates[idx] + '</span>' + fmtNum(data[idx], "");
+      tooltip.style.left = ((px / W) * 100) + "%";
+      tooltip.classList.add("visible");
+    });
+    plotWrap.addEventListener("mouseleave", () => {
+      crossLine.setAttribute("opacity", "0");
+      crossDot.setAttribute("opacity", "0");
+      tooltip.classList.remove("visible");
+    });
+
+    return chartWrap;
   }
 
   function buildValuationBlock(valuationList) {
@@ -1815,17 +2042,26 @@
   document.getElementById("feargreed-modal-close").addEventListener("click", closeFearGreedModal);
   feargreedModal.addEventListener("click", (e) => { if (e.target === feargreedModal) closeFearGreedModal(); });
 
+  const fxModal = document.getElementById("fx-modal");
+  document.getElementById("fx-modal-close").addEventListener("click", closeFxModal);
+  fxModal.addEventListener("click", (e) => { if (e.target === fxModal) closeFxModal(); });
+
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (!financeModal.hidden) closeFinanceModal();
     if (!consensusModal.hidden) closeConsensusModal();
     if (!feargreedModal.hidden) closeFearGreedModal();
+    if (!fxModal.hidden) closeFxModal();
   });
 
   if (usdKrw) {
     const fxPill = document.getElementById("fx-pill");
     fxPill.hidden = false;
     fxPill.textContent = "USD/KRW " + usdKrw.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (usdKrwSeries) {
+      fxPill.title = "클릭하면 1개월~1년 환율 추이를 볼 수 있습니다.";
+      fxPill.addEventListener("click", openFxModal);
+    }
   }
 
   if (fearGreed) {

@@ -2,6 +2,8 @@
 
 Local stock-summary dashboard. No backend, no build step — just PowerShell + a static HTML/JS template.
 
+**Live:** https://jhkim0603.github.io/StockDashboard/ — republished daily by the GitHub Actions workflow.
+
 ## Files
 
 - `Update-StockDashboard.ps1` — fetches live quotes (Yahoo Finance chart API, no key), recent

@@ -393,6 +393,7 @@ function Get-StockSnapshot {
     $news = Get-NewsHeadlines -query $newsQuery -lang $cfg.NewsLang
     $finance = Get-FinanceSnapshot -mode $cfg.FinanceMode -code $cfg.FinanceCode
     $consensus = Get-ConsensusSnapshot -mode $cfg.FinanceMode -code $cfg.FinanceCode
+    $pageUrl = Get-StockPageUrl -cfg $cfg
 
     [PSCustomObject]@{
         name      = $name
@@ -400,6 +401,7 @@ function Get-StockSnapshot {
         ticker    = "$($cfg.Symbol) · $($cfg.MarketLabel)"
         market    = $market
         currency  = $currency
+        pageUrl   = $pageUrl
         series    = $fullSeries
         dates     = $fullDates
         volume    = $meta.regularMarketVolume
@@ -447,50 +449,27 @@ function Get-CrossSignal {
     return $null
 }
 
-function Get-MaTrendComment {
-    # Mirrors the dashboard's own describeMaTrend() in template.html — same priority order
-    # (recent cross first, then 20/60/180 stacking), same terse "-임" phrasing.
-    param($series)
-    $ma20 = Get-MovingAverage -series $series -window 20
-    $ma60 = Get-MovingAverage -series $series -window 60
-    $ma180 = Get-MovingAverage -series $series -window 180
-    $i = $series.Count - 1
-    $last = $series[$i]
-    $a = $ma20[$i]; $b = $ma60[$i]; $c = $ma180[$i]
-
-    $cross = Get-CrossSignal -series $series
-    if ($cross -eq "golden") { return @{ text = "골든크로스임, 상승전환임"; tone = "up" } }
-    if ($cross -eq "dead")   { return @{ text = "데드크로스임, 하락전환임"; tone = "down" } }
-
-    if ($null -eq $a -or $null -eq $b) { return $null }  # not enough history yet for even the 20/60 pair
-
-    if ($null -ne $c) {
-        if ($last -gt $a -and $a -gt $b -and $b -gt $c) { return @{ text = "정배열임, 상승추세임"; tone = "up" } }
-        if ($last -lt $a -and $a -lt $b -and $b -lt $c) { return @{ text = "역배열임, 하락추세임"; tone = "down" } }
+function Get-StockPageUrl {
+    # Where the email's price link should go — a real per-ticker page to read more, the same
+    # way news links already go to their source article.
+    param($cfg)
+    if ($cfg.IsIndex) {
+        switch ($cfg.Symbol) {
+            "^IXIC" { return "https://www.google.com/finance/quote/.IXIC:INDEXNASDAQ" }
+            "^GSPC" { return "https://www.google.com/finance/quote/.INX:INDEXSP" }
+            "^KS11" { return "https://finance.naver.com/sise/sise_index.naver?code=KOSPI" }
+            default { return $null }
+        }
     }
-
-    if ($a -gt $b) { return @{ text = "정배열은 아님, 단기 상승세임"; tone = "up" } }
-    if ($a -lt $b) { return @{ text = "역배열은 아님, 단기 하락세임"; tone = "down" } }
-    return @{ text = "뚜렷한 추세 없음"; tone = $null }
-}
-
-function Get-Sparkline {
-    # Plain-text trend indicator using Unicode block chars — no image, no CSS, renders in
-    # every email client because it's just text. Precision isn't the point, shape is.
-    param($series, $length = 20)
-    $blocks = @([char]0x2581, [char]0x2582, [char]0x2583, [char]0x2584, [char]0x2585, [char]0x2586, [char]0x2587, [char]0x2588)
-    $recent = @($series | Select-Object -Last $length)
-    if ($recent.Count -eq 0) { return "" }
-    $min = ($recent | Measure-Object -Minimum).Minimum
-    $max = ($recent | Measure-Object -Maximum).Maximum
-    $range = $max - $min
-    if ($range -eq 0) { $range = 1 }
-    -join ($recent | ForEach-Object {
-        $idx = [math]::Floor((($_ - $min) / $range) * 7)
-        if ($idx -gt 7) { $idx = 7 }
-        if ($idx -lt 0) { $idx = 0 }
-        $blocks[$idx]
-    })
+    if ($cfg.FinanceMode -eq "domestic" -and $cfg.FinanceCode) {
+        return "https://finance.naver.com/item/main.naver?code=$($cfg.FinanceCode)"
+    }
+    if ($cfg.FinanceMode -eq "overseas" -and $cfg.FinanceCode) {
+        $exchange = if ($cfg.FinanceCode.EndsWith(".N")) { "NYSE" } else { "NASDAQ" }
+        $sym = $cfg.FinanceCode -replace '\.[ON]$', ''
+        return "https://www.google.com/finance/quote/${sym}:${exchange}"
+    }
+    return $null
 }
 
 Write-Host "Fetching USD/KRW exchange rate..."
@@ -635,14 +614,11 @@ $rowsHtml = foreach ($s in $stocks) {
     $arrow = if ($up) { "▲" } else { "▼" }
     $priceFmt = if ($s.currency -eq "₩") { "{0:N0}" -f $last } else { "{0:N2}" -f $last }
 
-    $trend = Get-MaTrendComment -series $s.series
-    $trendHtml = ""
-    if ($trend) {
-        $trendColor = if ($trend.tone -eq "up") { "#0ca30c" } elseif ($trend.tone -eq "down") { "#e34948" } else { "#898781" }
-        $trendHtml = "<div style='font-size:11.5px;font-weight:600;color:$trendColor;margin-top:4px;'>$($trend.text)</div>"
-    }
-
-    $spark = Get-Sparkline -series $s.series
+    $cross = Get-CrossSignal -series $s.series
+    $crossTag =
+        if ($cross -eq "golden") { " <span style='color:#0ca30c;font-weight:700;'>[골든크로스]</span>" }
+        elseif ($cross -eq "dead") { " <span style='color:#e34948;font-weight:700;'>[데드크로스]</span>" }
+        else { "" }
 
     $newsHtml = ""
     if ($s.news -and $s.news.Count -gt 0) {
@@ -652,18 +628,21 @@ $rowsHtml = foreach ($s in $stocks) {
         $newsHtml = $newsLines -join ""
     }
 
+    $priceInner = @"
+<div style="font-weight:650;font-size:14px;color:#0b0b0b;">$($s.currency)$priceFmt</div>
+    <div style="font-size:12px;font-weight:600;color:$color;">$arrow $([math]::Abs($pct).ToString("N2"))%</div>
+"@
+    $priceHtml = if ($s.pageUrl) { "<a href='$($s.pageUrl)' style='text-decoration:none;display:block;'>$priceInner</a>" } else { $priceInner }
+
     @"
 <tr>
   <td style="padding:10px 12px;border-bottom:1px solid #e1e0d9;">
-    <div style="font-weight:600;font-size:13px;color:#0b0b0b;">$($s.name)</div>
+    <div style="font-weight:600;font-size:13px;color:#0b0b0b;">$($s.name)$crossTag</div>
     <div style="font-size:11px;color:#898781;">$($s.ticker)</div>
-    $trendHtml
     $newsHtml
   </td>
   <td style="padding:10px 12px;border-bottom:1px solid #e1e0d9;text-align:right;white-space:nowrap;vertical-align:top;">
-    <div style="font-weight:650;font-size:14px;color:#0b0b0b;">$($s.currency)$priceFmt</div>
-    <div style="font-size:12px;font-weight:600;color:$color;">$arrow $([math]::Abs($pct).ToString("N2"))%</div>
-    <div style="font-size:13px;letter-spacing:-1px;color:$color;margin-top:3px;" title="최근 20거래일 추이">$spark</div>
+    $priceHtml
   </td>
 </tr>
 "@

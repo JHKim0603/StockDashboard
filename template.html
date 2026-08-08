@@ -659,6 +659,16 @@
     white-space: nowrap;
   }
   .valuation-xaxis span.est { color: var(--accent); }
+  .valuation-plot { position: relative; }
+  .valuation-yaxis span {
+    position: absolute;
+    right: 0;
+    transform: translateY(-50%);
+    font-size: 9px;
+    color: var(--ink-muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
 
   .consensus-stats {
     display: grid;
@@ -1200,6 +1210,12 @@
     svg.setAttribute("preserveAspectRatio", "none");
     svg.classList.add("valuation-svg");
 
+    // min/avg/max labels are plain HTML, not SVG <text>: this SVG stretches non-uniformly
+    // (preserveAspectRatio="none") to fill the card width, and that distorts SVG text glyphs
+    // (numbers look squashed). Plain DOM text isn't subject to that scale, so it stays crisp.
+    const yAxis = document.createElement("div");
+    yAxis.className = "valuation-yaxis";
+
     [["min", val.min], ["avg", val.avg], ["max", val.max]].forEach(([k, v]) => {
       const gy = y(v);
       const gl = document.createElementNS(svgNS, "line");
@@ -1211,13 +1227,10 @@
       gl.setAttribute("vector-effect", "non-scaling-stroke");
       svg.appendChild(gl);
 
-      const label = document.createElementNS(svgNS, "text");
-      label.setAttribute("x", String(W - padR + 4));
-      label.setAttribute("y", (gy + 3).toFixed(1));
-      label.setAttribute("font-size", "9");
-      label.setAttribute("fill", "var(--ink-muted)");
+      const label = document.createElement("span");
+      label.style.top = ((gy / H) * 100) + "%";
       label.textContent = (k === "min" ? "최저 " : k === "max" ? "최고 " : "평균 ") + v.toFixed(1);
-      svg.appendChild(label);
+      yAxis.appendChild(label);
     });
 
     const linePoints = actualPoints.map(p => [x(val.points.indexOf(p)), y(p.value)]);
@@ -1242,7 +1255,11 @@
       svg.appendChild(dot);
     });
 
-    wrap.appendChild(svg);
+    const plot = document.createElement("div");
+    plot.className = "valuation-plot";
+    plot.appendChild(svg);
+    plot.appendChild(yAxis);
+    wrap.appendChild(plot);
 
     const xAxis = document.createElement("div");
     xAxis.className = "valuation-xaxis";

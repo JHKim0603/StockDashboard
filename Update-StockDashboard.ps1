@@ -666,13 +666,13 @@ $rowsHtml = foreach ($s in $stocks) {
 
     @"
 <tr>
-  <td style="padding:10px 12px;border-bottom:1px solid #e1e0d9;">
+  <td style="padding:10px 12px;border-bottom:1px solid #e1e0d9;width:auto;">
     <div style="font-weight:600;font-size:13px;color:#0b0b0b;">$($s.name)</div>
     <div style="font-size:11px;color:#898781;">$($s.ticker)</div>
     $trendHtml
     $newsHtml
   </td>
-  <td style="padding:10px 12px;border-bottom:1px solid #e1e0d9;text-align:right;white-space:nowrap;vertical-align:top;">
+  <td width="112" style="padding:10px 12px;border-bottom:1px solid #e1e0d9;text-align:right;white-space:nowrap;vertical-align:top;width:112px;max-width:112px;">
     $priceHtml
   </td>
 </tr>

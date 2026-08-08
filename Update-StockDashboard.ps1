@@ -619,13 +619,14 @@ $rowsHtml = foreach ($s in $stocks) {
 }
 
 $fxLine = if ($usdKrw) { " · USD/KRW $($usdKrw.ToString('N2'))" } else { "" }
+$fgLine = if ($fearGreed) { " · 공포·탐욕지수 $($fearGreed.score)($($fearGreed.ratingKo))" } else { "" }
 
 $emailHtml = @"
 <!DOCTYPE html>
 <html><body style="margin:0;padding:0;background:#f9f9f7;font-family:'Malgun Gothic',sans-serif;">
 <div style="max-width:600px;margin:0 auto;padding:24px 16px;">
-  <h2 style="margin:0 0 4px;color:#0b0b0b;">JH 투자 DASHBOARD</h2>
-  <div style="font-size:12px;color:#898781;margin-bottom:16px;">$emailDateStr 기준$fxLine</div>
+  <h2 style="margin:0 0 4px;color:#0b0b0b;">JH 주식 투자 Dashboard</h2>
+  <div style="font-size:12px;color:#898781;margin-bottom:16px;">$emailDateStr 기준$fxLine$fgLine</div>
   <table style="width:100%;border-collapse:collapse;background:#ffffff;border:1px solid #e1e0d9;border-radius:8px;">
     $($rowsHtml -join "`n")
   </table>

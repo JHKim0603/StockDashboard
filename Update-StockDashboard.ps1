@@ -456,6 +456,16 @@ try {
     Write-Warning "Exchange rate fetch failed: $($_.Exception.Message)"
 }
 
+function Get-FearGreedBand {
+    # CNN's own published band boundaries for the 0-100 score.
+    param([double]$score)
+    if ($score -lt 25) { return @{ en = "extreme fear";  ko = "극단적 공포" } }
+    if ($score -lt 45) { return @{ en = "fear";          ko = "공포" } }
+    if ($score -lt 56) { return @{ en = "neutral";       ko = "중립" } }
+    if ($score -lt 76) { return @{ en = "greed";         ko = "탐욕" } }
+    return @{ en = "extreme greed"; ko = "극단적 탐욕" }
+}
+
 Write-Host "Fetching CNN Fear & Greed Index..."
 $fearGreed = $null
 try {
@@ -486,10 +496,27 @@ try {
         "extreme greed" { "극단적 탐욕" }
         default         { $fg.rating }
     }
+
+    function New-FgPoint($label, $score) {
+        $band = Get-FearGreedBand -score $score
+        [PSCustomObject]@{
+            label  = $label
+            score  = [math]::Round([double]$score, 0)
+            rating = $band.en
+            ratingKo = $band.ko
+        }
+    }
+
     $fearGreed = [PSCustomObject]@{
         score    = [math]::Round([double]$fg.score, 0)
         rating   = $fg.rating
         ratingKo = $ratingKo
+        history  = @(
+            New-FgPoint "전일"    $fg.previous_close
+            New-FgPoint "1주 전"  $fg.previous_1_week
+            New-FgPoint "1개월 전" $fg.previous_1_month
+            New-FgPoint "1년 전"  $fg.previous_1_year
+        )
     }
 } catch {
     Write-Warning "Fear & Greed index fetch failed: $($_.Exception.Message)"

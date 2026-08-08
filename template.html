@@ -146,6 +146,7 @@
     font-variant-numeric: tabular-nums;
   }
   .feargreed-pill {
+    font: inherit;
     font-size: 12px;
     color: var(--ink-secondary);
     background: var(--surface);
@@ -153,9 +154,37 @@
     border-radius: 999px;
     padding: 6px 12px;
     font-variant-numeric: tabular-nums;
+    cursor: pointer;
   }
+  .feargreed-pill:hover { color: var(--ink-primary); border-color: var(--ink-muted); }
+  .feargreed-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .feargreed-pill.down { color: var(--bad); background: var(--bad-wash); border-color: transparent; }
   .feargreed-pill.up   { color: var(--good); background: var(--good-wash); border-color: transparent; }
+
+  .fg-score-row { display: flex; align-items: baseline; gap: 10px; margin-top: 10px; }
+  .fg-score { font-size: 34px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .fg-rating { font-size: 14px; font-weight: 600; }
+  .fg-rating.up   { color: var(--good); }
+  .fg-rating.down { color: var(--bad); }
+  .fg-bands { display: flex; gap: 4px; margin-top: 14px; }
+  .fg-bands .band {
+    flex: 1;
+    text-align: center;
+    font-size: 10.5px;
+    color: var(--ink-muted);
+    background: var(--page);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 2px;
+  }
+  .fg-bands .band.current {
+    color: var(--ink-primary);
+    font-weight: 700;
+    border-color: var(--accent);
+    background: var(--accent-wash);
+  }
+  .fg-explain { margin-top: 16px; font-size: 12.5px; line-height: 1.6; color: var(--ink-secondary); }
+  .fg-explain p + p { margin-top: 8px; }
   .regen-link {
     font-size: 12px;
     font-weight: 600;
@@ -734,7 +763,7 @@
     </div>
     <div class="topbar-right">
       <div class="fx-pill" id="fx-pill" hidden></div>
-      <div class="feargreed-pill" id="feargreed-pill" hidden></div>
+      <button type="button" class="feargreed-pill" id="feargreed-pill" hidden></button>
       <div class="updated-pill"><span class="dot"></span><span id="updated-text">불러오는 중…</span></div>
       <a class="regen-link" href="https://github.com/JHKim0603/StockDashboard/actions/workflows/update-dashboard.yml" target="_blank" rel="noopener noreferrer" title="GitHub Actions에서 지금 바로 데이터 갱신을 실행합니다 (실행 후 1~2분 뒤 새로고침 버튼을 눌러주세요)">지금 갱신하기 ↗</a>
       <button type="button" class="theme-toggle" id="refresh-btn" aria-label="새로고침" title="페이지를 새로고침해서 최신 생성 데이터를 다시 불러옵니다">⟳</button>
@@ -777,6 +806,19 @@
         <button type="button" class="modal-close" id="consensus-modal-close" aria-label="닫기">✕</button>
       </div>
       <div id="consensus-modal-body"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="feargreed-modal" hidden>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="feargreed-modal-name">
+      <div class="modal-head">
+        <div>
+          <div class="name" id="feargreed-modal-name">공포·탐욕지수</div>
+          <div class="unit">CNN Business Fear &amp; Greed Index</div>
+        </div>
+        <button type="button" class="modal-close" id="feargreed-modal-close" aria-label="닫기">✕</button>
+      </div>
+      <div id="feargreed-modal-body"></div>
     </div>
   </div>
 </div>
@@ -1078,6 +1120,70 @@
 
   function closeFinanceModal() {
     document.getElementById("finance-modal").hidden = true;
+  }
+
+  function fgTone(rating) {
+    return rating.includes("fear") ? "down" : rating.includes("greed") ? "up" : "";
+  }
+
+  const FG_BANDS = [
+    { key: "extreme fear",  ko: "극단적 공포", range: "0-24" },
+    { key: "fear",          ko: "공포",       range: "25-44" },
+    { key: "neutral",       ko: "중립",       range: "45-55" },
+    { key: "greed",         ko: "탐욕",       range: "56-75" },
+    { key: "extreme greed", ko: "극단적 탐욕", range: "76-100" }
+  ];
+
+  function openFearGreedModal() {
+    const modal = document.getElementById("feargreed-modal");
+    const body = document.getElementById("feargreed-modal-body");
+    body.innerHTML = "";
+
+    const scoreRow = document.createElement("div");
+    scoreRow.className = "fg-score-row";
+    const tone = fgTone(fearGreed.rating);
+    scoreRow.innerHTML =
+      '<span class="fg-score">' + fearGreed.score + '</span>' +
+      '<span class="fg-rating' + (tone ? " " + tone : "") + '">' + fearGreed.ratingKo + '</span>';
+    body.appendChild(scoreRow);
+
+    const bands = document.createElement("div");
+    bands.className = "fg-bands";
+    FG_BANDS.forEach(b => {
+      const el = document.createElement("div");
+      el.className = "band" + (b.key === fearGreed.rating ? " current" : "");
+      el.innerHTML = b.ko + '<br>' + b.range;
+      bands.appendChild(el);
+    });
+    body.appendChild(bands);
+
+    if (fearGreed.history && fearGreed.history.length) {
+      const stats = document.createElement("div");
+      stats.className = "consensus-stats";
+      fearGreed.history.forEach(h => {
+        const hTone = fgTone(h.rating);
+        const stat = document.createElement("div");
+        stat.className = "stat";
+        stat.innerHTML =
+          '<div class="stat-label">' + h.label + '</div>' +
+          '<div class="stat-val' + (hTone ? " " + hTone : "") + '">' + h.score + ' <span style="font-size:11px;font-weight:500;">(' + h.ratingKo + ')</span></div>';
+        stats.appendChild(stat);
+      });
+      body.appendChild(stats);
+    }
+
+    const explain = document.createElement("div");
+    explain.className = "fg-explain";
+    explain.innerHTML =
+      '<p>CNN이 변동성(VIX)·풋/콜 옵션 비율·정크본드 수요·주가 모멘텀 등 7가지 지표를 종합해 만드는 미국 증시 투자심리 지수입니다. 0에 가까울수록 투자자들이 공포에 질려 있다는 뜻이고, 100에 가까울수록 탐욕(과열)이 심하다는 뜻입니다.</p>' +
+      '<p>"남들이 공포에 질려 있을 때 욕심을 내라"는 워런 버핏의 격언처럼, 극단적 공포 구간을 저가 매수 기회로, 극단적 탐욕 구간을 차익 실현 시점으로 보는 역발상 투자자들도 있습니다 — 다만 지수 하나만으로 매매 타이밍을 판단하는 건 위험하니 참고 지표로만 활용하세요.</p>';
+    body.appendChild(explain);
+
+    modal.hidden = false;
+  }
+
+  function closeFearGreedModal() {
+    document.getElementById("feargreed-modal").hidden = true;
   }
 
   function buildValuationBlock(valuationList) {
@@ -1687,10 +1793,15 @@
   document.getElementById("consensus-modal-close").addEventListener("click", closeConsensusModal);
   consensusModal.addEventListener("click", (e) => { if (e.target === consensusModal) closeConsensusModal(); });
 
+  const feargreedModal = document.getElementById("feargreed-modal");
+  document.getElementById("feargreed-modal-close").addEventListener("click", closeFearGreedModal);
+  feargreedModal.addEventListener("click", (e) => { if (e.target === feargreedModal) closeFearGreedModal(); });
+
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (!financeModal.hidden) closeFinanceModal();
     if (!consensusModal.hidden) closeConsensusModal();
+    if (!feargreedModal.hidden) closeFearGreedModal();
   });
 
   if (usdKrw) {
@@ -1702,10 +1813,11 @@
   if (fearGreed) {
     const fgPill = document.getElementById("feargreed-pill");
     fgPill.hidden = false;
-    const tone = fearGreed.rating.includes("fear") ? "down" : fearGreed.rating.includes("greed") ? "up" : "";
+    const tone = fgTone(fearGreed.rating);
     fgPill.className = "feargreed-pill" + (tone ? " " + tone : "");
     fgPill.textContent = "공포·탐욕지수 " + fearGreed.score + " (" + fearGreed.ratingKo + ")";
-    fgPill.title = "CNN Fear & Greed Index — 미국 증시(나스닥 포함) 투자심리 지표, 0(극단적 공포)~100(극단적 탐욕)";
+    fgPill.title = "CNN Fear & Greed Index — 미국 증시 전반의 투자심리 지표. 클릭하면 자세히 볼 수 있습니다.";
+    fgPill.addEventListener("click", openFearGreedModal);
   }
 
   document.getElementById("refresh-btn").addEventListener("click", () => {

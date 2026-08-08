@@ -145,6 +145,17 @@
     padding: 6px 12px;
     font-variant-numeric: tabular-nums;
   }
+  .feargreed-pill {
+    font-size: 12px;
+    color: var(--ink-secondary);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .feargreed-pill.down { color: var(--bad); background: var(--bad-wash); border-color: transparent; }
+  .feargreed-pill.up   { color: var(--good); background: var(--good-wash); border-color: transparent; }
   .regen-link {
     font-size: 12px;
     font-weight: 600;
@@ -723,6 +734,7 @@
     </div>
     <div class="topbar-right">
       <div class="fx-pill" id="fx-pill" hidden></div>
+      <div class="feargreed-pill" id="feargreed-pill" hidden></div>
       <div class="updated-pill"><span class="dot"></span><span id="updated-text">불러오는 중…</span></div>
       <a class="regen-link" href="https://github.com/JHKim0603/StockDashboard/actions/workflows/update-dashboard.yml" target="_blank" rel="noopener noreferrer" title="GitHub Actions에서 지금 바로 데이터 갱신을 실행합니다 (실행 후 1~2분 뒤 새로고침 버튼을 눌러주세요)">지금 갱신하기 ↗</a>
       <button type="button" class="theme-toggle" id="refresh-btn" aria-label="새로고침" title="페이지를 새로고침해서 최신 생성 데이터를 다시 불러옵니다">⟳</button>
@@ -737,6 +749,7 @@
     <li>최근 이슈는 Google 뉴스 검색 상위 기사의 원문 제목이며 AI가 작성한 요약이 아닙니다.</li>
     <li>미국 종목의 영문 기사 제목은 Google 번역으로 자동 번역되어 표시되며("번역됨" 표시, 마우스를 올리면 원문 확인 가능), 기계 번역이라 원문과 뉘앙스가 다를 수 있습니다 — 링크는 항상 영문 원문 기사로 연결됩니다.</li>
     <li>실적·목표주가·환율 데이터 출처: 네이버 증권 / Yahoo Finance(증권사 컨센서스 포함, 종목별로 제공 여부가 다를 수 있음).</li>
+    <li>공포·탐욕지수 출처: CNN Business Fear &amp; Greed Index(미국 증시 전반 투자심리 지표 — 나스닥 개별 종목이 아닌 시장 전체 기준).</li>
     <li>투자 판단의 참고용으로만 사용하세요 — 개인 용도 조회입니다.</li>
     <li>레버리지·인버스 상품은 일간 수익률을 추종하므로 장기 보유 시 실제 누적 수익률이 기초자산과 크게 달라질 수 있습니다.</li>
   </ul>
@@ -772,6 +785,7 @@
 (function () {
   const stocks = __STOCKS_JSON__;
   const usdKrw = __USDKRW_JSON__;
+  const fearGreed = __FEARGREED_JSON__;
   const fetchedAt = "__FETCHED_AT__";
   const RANGES = [
     { key: "1M", label: "1개월", days: 22 },
@@ -1683,6 +1697,15 @@
     const fxPill = document.getElementById("fx-pill");
     fxPill.hidden = false;
     fxPill.textContent = "USD/KRW " + usdKrw.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  if (fearGreed) {
+    const fgPill = document.getElementById("feargreed-pill");
+    fgPill.hidden = false;
+    const tone = fearGreed.rating.includes("fear") ? "down" : fearGreed.rating.includes("greed") ? "up" : "";
+    fgPill.className = "feargreed-pill" + (tone ? " " + tone : "");
+    fgPill.textContent = "공포·탐욕지수 " + fearGreed.score + " (" + fearGreed.ratingKo + ")";
+    fgPill.title = "CNN Fear & Greed Index — 미국 증시(나스닥 포함) 투자심리 지표, 0(극단적 공포)~100(극단적 탐욕)";
   }
 
   document.getElementById("refresh-btn").addEventListener("click", () => {

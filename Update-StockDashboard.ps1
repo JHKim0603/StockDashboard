@@ -456,6 +456,45 @@ try {
     Write-Warning "Exchange rate fetch failed: $($_.Exception.Message)"
 }
 
+Write-Host "Fetching CNN Fear & Greed Index..."
+$fearGreed = $null
+try {
+    # Unofficial endpoint behind CNN's own fear-and-greed page, fronted by Akamai bot detection —
+    # needs a full browser-like header set (bare User-Agent + Referer isn't always enough), and
+    # even then occasionally 418s, so retry once after a short pause before giving up.
+    $fgHeaders = @{
+        "User-Agent"      = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        "Referer"         = "https://edition.cnn.com/markets/fear-and-greed"
+        "Accept"          = "application/json, text/plain, */*"
+        "Accept-Language" = "en-US,en;q=0.9"
+    }
+    $fgResp = $null
+    for ($attempt = 1; $attempt -le 2 -and -not $fgResp; $attempt++) {
+        try {
+            $fgResp = Invoke-RestMethod -Uri "https://production.dataviz.cnn.io/index/fearandgreed/graphdata" -Headers $fgHeaders
+        } catch {
+            if ($attempt -eq 2) { throw }
+            Start-Sleep -Seconds 2
+        }
+    }
+    $fg = $fgResp.fear_and_greed
+    $ratingKo = switch ($fg.rating) {
+        "extreme fear"  { "극단적 공포" }
+        "fear"          { "공포" }
+        "neutral"       { "중립" }
+        "greed"         { "탐욕" }
+        "extreme greed" { "극단적 탐욕" }
+        default         { $fg.rating }
+    }
+    $fearGreed = [PSCustomObject]@{
+        score    = [math]::Round([double]$fg.score, 0)
+        rating   = $fg.rating
+        ratingKo = $ratingKo
+    }
+} catch {
+    Write-Warning "Fear & Greed index fetch failed: $($_.Exception.Message)"
+}
+
 Write-Host "Fetching live quotes and headlines..."
 $stocks = foreach ($t in $tickers) {
     Write-Host "  - $($t.Symbol)"
@@ -471,10 +510,11 @@ $stocks = foreach ($t in $tickers) {
 
 $stocksJson = ConvertTo-Json -InputObject @($stocks) -Depth 8
 $usdKrwJson = ConvertTo-Json -InputObject $usdKrw
+$fearGreedJson = ConvertTo-Json -InputObject $fearGreed
 $fetchedAt = $nowKst.ToString("yyyy-MM-ddTHH:mm:ss") + "+09:00"  # $nowKst's DateTimeKind is still Utc after the manual +9h shift, so "zzz" would report +00:00 — append the known-fixed KST offset literally instead.
 
 $template = Get-Content -Path (Join-Path $root "template.html") -Raw -Encoding UTF8
-$output = $template.Replace("__STOCKS_JSON__", $stocksJson).Replace("__USDKRW_JSON__", $usdKrwJson).Replace("__FETCHED_AT__", $fetchedAt)
+$output = $template.Replace("__STOCKS_JSON__", $stocksJson).Replace("__USDKRW_JSON__", $usdKrwJson).Replace("__FEARGREED_JSON__", $fearGreedJson).Replace("__FETCHED_AT__", $fetchedAt)
 
 $outPath = Join-Path $root "dashboard.html"
 Set-Content -Path $outPath -Value $output -Encoding UTF8

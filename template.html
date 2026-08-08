@@ -161,28 +161,41 @@
   .feargreed-pill.down { color: var(--bad); background: var(--bad-wash); border-color: transparent; }
   .feargreed-pill.up   { color: var(--good); background: var(--good-wash); border-color: transparent; }
 
-  .fg-score-row { display: flex; align-items: baseline; gap: 10px; margin-top: 10px; }
+  .fg-score-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
   .fg-score { font-size: 34px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
   .fg-rating { font-size: 14px; font-weight: 600; }
   .fg-rating.up   { color: var(--good); }
   .fg-rating.down { color: var(--bad); }
+  .fg-action {
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 4px 10px;
+    color: var(--ink-secondary);
+    background: var(--page);
+  }
+  .fg-action.up   { color: var(--good); background: var(--good-wash); }
+  .fg-action.down { color: var(--bad);  background: var(--bad-wash); }
   .fg-bands { display: flex; gap: 4px; margin-top: 14px; }
   .fg-bands .band {
     flex: 1;
     text-align: center;
     font-size: 10.5px;
+    line-height: 1.5;
     color: var(--ink-muted);
     background: var(--page);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 6px 2px;
   }
+  .fg-bands .band .band-action { font-weight: 600; }
   .fg-bands .band.current {
     color: var(--ink-primary);
     font-weight: 700;
     border-color: var(--accent);
     background: var(--accent-wash);
   }
+  .fg-bands .band.current .band-action { color: var(--accent); }
   .fg-explain { margin-top: 16px; font-size: 12.5px; line-height: 1.6; color: var(--ink-secondary); }
   .fg-explain p + p { margin-top: 8px; }
   .regen-link {
@@ -1126,12 +1139,14 @@
     return rating.includes("fear") ? "down" : rating.includes("greed") ? "up" : "";
   }
 
+  // "공포에 사고 탐욕에 팔라"는 역발상 원칙을 5단계 밴드에 그대로 확장한 것 — 지수 하나만 보고
+  // 내리는 기계적인 매매 신호가 아니라 참고용 코멘트입니다(아래 fg-explain 안내문에서도 명시).
   const FG_BANDS = [
-    { key: "extreme fear",  ko: "극단적 공포", range: "0-24" },
-    { key: "fear",          ko: "공포",       range: "25-44" },
-    { key: "neutral",       ko: "중립",       range: "45-55" },
-    { key: "greed",         ko: "탐욕",       range: "56-75" },
-    { key: "extreme greed", ko: "극단적 탐욕", range: "76-100" }
+    { key: "extreme fear",  ko: "극단적 공포", range: "0-24",   action: "적극 매수", actionTone: "up" },
+    { key: "fear",          ko: "공포",       range: "25-44",  action: "매수 고려", actionTone: "up" },
+    { key: "neutral",       ko: "중립",       range: "45-55",  action: "관망",     actionTone: "" },
+    { key: "greed",         ko: "탐욕",       range: "56-75",  action: "매도 고려", actionTone: "down" },
+    { key: "extreme greed", ko: "극단적 탐욕", range: "76-100", action: "적극 매도", actionTone: "down" }
   ];
 
   function openFearGreedModal() {
@@ -1139,12 +1154,15 @@
     const body = document.getElementById("feargreed-modal-body");
     body.innerHTML = "";
 
+    const currentBand = FG_BANDS.find(b => b.key === fearGreed.rating);
+
     const scoreRow = document.createElement("div");
     scoreRow.className = "fg-score-row";
     const tone = fgTone(fearGreed.rating);
     scoreRow.innerHTML =
       '<span class="fg-score">' + fearGreed.score + '</span>' +
-      '<span class="fg-rating' + (tone ? " " + tone : "") + '">' + fearGreed.ratingKo + '</span>';
+      '<span class="fg-rating' + (tone ? " " + tone : "") + '">' + fearGreed.ratingKo + '</span>' +
+      (currentBand ? '<span class="fg-action' + (currentBand.actionTone ? " " + currentBand.actionTone : "") + '">' + currentBand.action + '</span>' : "");
     body.appendChild(scoreRow);
 
     const bands = document.createElement("div");
@@ -1152,7 +1170,7 @@
     FG_BANDS.forEach(b => {
       const el = document.createElement("div");
       el.className = "band" + (b.key === fearGreed.rating ? " current" : "");
-      el.innerHTML = b.ko + '<br>' + b.range;
+      el.innerHTML = b.ko + '<br>' + b.range + '<br><span class="band-action">' + b.action + '</span>';
       bands.appendChild(el);
     });
     body.appendChild(bands);

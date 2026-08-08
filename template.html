@@ -95,7 +95,7 @@
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 12px;
-    max-width: 1120px;
+    max-width: 1480px;
     margin: 0 auto 28px;
   }
   .topbar h1 {
@@ -172,7 +172,7 @@
   .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   .grid {
-    max-width: 1120px;
+    max-width: 1480px;
     margin: 0 auto;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -485,7 +485,7 @@
   .news-empty { font-size: 12.5px; color: var(--ink-muted); }
 
   .footnote {
-    max-width: 1120px;
+    max-width: 1480px;
     margin: 28px auto 0;
     padding: 0;
     list-style: none;
@@ -811,7 +811,7 @@
   ];
   const DEFAULT_RANGE = "1M";
   const MA_SHORT = 20;
-  const MA_LONG = 60;
+  const MA_LONG = 180;
   const VALUATION_METRIC_INFO = {
     PER: "PER(주가수익비율) = 주가 ÷ 주당순이익(EPS). 지금 주가가 회사가 벌어들이는 이익의 몇 배인지를 나타내며, 낮을수록 이익 대비 주가가 저렴하다는 뜻입니다.",
     PBR: "PBR(주가순자산비율) = 주가 ÷ 주당순자산(BPS). 지금 주가가 회사 장부상 순자산의 몇 배인지를 나타내며, 1배보다 낮으면 회사를 지금 청산해도 남는 자산 가치보다 싸게 거래된다는 뜻입니다."
@@ -831,11 +831,11 @@
   // Looks for an actual golden/dead cross event (MA_SHORT crossing MA_LONG) within the last
   // `lookback` trading days — not just "which is on top right now", which would flag every
   // day of an existing trend instead of the moment it started.
-  function detectCross(ma20, ma60, lookback = 5) {
+  function detectCross(ma20, maLong, lookback = 5) {
     const diffs = [];
     for (let i = ma20.length - 1; i >= 0 && diffs.length < lookback + 1; i--) {
-      if (ma20[i] === null || ma60[i] === null) break;
-      diffs.unshift(ma20[i] - ma60[i]);
+      if (ma20[i] === null || maLong[i] === null) break;
+      diffs.unshift(ma20[i] - maLong[i]);
     }
     for (let i = 1; i < diffs.length; i++) {
       if (diffs[i - 1] <= 0 && diffs[i] > 0) return "golden";
@@ -1530,17 +1530,17 @@
     const n = stock.series.length;
     const count = days === Infinity ? n : Math.min(days, n);
     const ma20 = computeMA(stock.series, MA_SHORT);
-    const ma60 = computeMA(stock.series, MA_LONG);
+    const maLong = computeMA(stock.series, MA_LONG);
     return {
       series: stock.series.slice(n - count),
       dates: stock.dates.slice(n - count),
       ma20: ma20.slice(n - count),
-      ma60: ma60.slice(n - count)
+      maLong: maLong.slice(n - count)
     };
   }
 
   function buildSparkline(stock, rangeKey) {
-    const { series: data, dates, ma20, ma60 } = sliceForRange(stock, rangeKey);
+    const { series: data, dates, ma20, maLong } = sliceForRange(stock, rangeKey);
     const ccy = stock.currency;
 
     // Axis labels are plain HTML (not SVG <text>) on purpose: the SVG below uses
@@ -1564,7 +1564,7 @@
 
     const W = 300, H = 64;
     const pad = 7;
-    const maValues = [...ma20, ...ma60].filter(v => v !== null && v !== undefined);
+    const maValues = [...ma20, ...maLong].filter(v => v !== null && v !== undefined);
     const min = Math.min(data.length ? Math.min(...data) : Infinity, ...(maValues.length ? maValues : [Infinity]));
     const max = Math.max(data.length ? Math.max(...data) : -Infinity, ...(maValues.length ? maValues : [-Infinity]));
     const mid = (min + max) / 2;
@@ -1626,7 +1626,7 @@
     area.setAttribute("stroke", "none");
     svg.appendChild(area);
 
-    [[ma20, "var(--ma1)"], [ma60, "var(--ma2)"]].forEach(([maSeries, color]) => {
+    [[ma20, "var(--ma1)"], [maLong, "var(--ma2)"]].forEach(([maSeries, color]) => {
       const d = buildMAPath(maSeries, x, y);
       if (!d) return;
       const maLine = document.createElementNS(svgNS, "path");

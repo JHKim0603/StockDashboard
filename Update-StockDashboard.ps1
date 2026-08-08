@@ -434,11 +434,11 @@ function Get-CrossSignal {
     # 5-day lookback for an actual sign-flip event, not just "which MA is on top now".
     param($series, $lookback = 5)
     $ma20 = Get-MovingAverage -series $series -window 20
-    $ma60 = Get-MovingAverage -series $series -window 60
+    $ma180 = Get-MovingAverage -series $series -window 180
     $diffs = [System.Collections.ArrayList]@()
     for ($i = $series.Count - 1; $i -ge 0 -and $diffs.Count -lt ($lookback + 1); $i--) {
-        if ($null -eq $ma20[$i] -or $null -eq $ma60[$i]) { break }
-        [void]$diffs.Insert(0, ($ma20[$i] - $ma60[$i]))
+        if ($null -eq $ma20[$i] -or $null -eq $ma180[$i]) { break }
+        [void]$diffs.Insert(0, ($ma20[$i] - $ma180[$i]))
     }
     for ($i = 1; $i -lt $diffs.Count; $i++) {
         if ($diffs[$i - 1] -le 0 -and $diffs[$i] -gt 0) { return "golden" }

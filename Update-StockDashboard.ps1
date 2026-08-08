@@ -641,5 +641,5 @@ $emailHtml = @"
 # stray character in some clients — write both files BOM-less instead.
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 [System.IO.File]::WriteAllText((Join-Path $root "email-summary.html"), $emailHtml, $utf8NoBom)
-[System.IO.File]::WriteAllText((Join-Path $root "email-subject.txt"), "JH 투자 DASHBOARD 요약 - $emailDateStr", $utf8NoBom)
+[System.IO.File]::WriteAllText((Join-Path $root "email-subject.txt"), "JH 주식 투자 Dashboard - $emailDateStr", $utf8NoBom)
 Write-Host "Email summary written: email-summary.html"

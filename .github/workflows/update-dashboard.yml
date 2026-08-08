@@ -2,7 +2,7 @@ name: Update Stock Dashboard
 
 on:
   schedule:
-    - cron: '0 22 * * *'  # 07:00 KST daily (after US close, before KOSPI open)
+    - cron: '30 23 * * *'  # 08:30 KST daily
   workflow_dispatch: {}
 
 permissions:

@@ -18,6 +18,7 @@
     --bad-wash:        rgba(227,73,72,0.10);
     --ma1:             #4a3aa7;
     --ma2:             #eb6834;
+    --ma3:             #e87ba4;
   }
   @media (prefers-color-scheme: dark) {
     .viz-root {
@@ -38,6 +39,7 @@
       --bad-wash:        rgba(230,103,103,0.14);
       --ma1:             #9085e9;
       --ma2:             #d95926;
+      --ma3:             #d55181;
     }
   }
   :root[data-theme="dark"] .viz-root {
@@ -58,6 +60,7 @@
     --bad-wash:        rgba(230,103,103,0.14);
     --ma1:             #9085e9;
     --ma2:             #d95926;
+    --ma3:             #d55181;
   }
   :root[data-theme="light"] .viz-root {
     color-scheme: light;
@@ -77,6 +80,7 @@
     --bad-wash:        rgba(227,73,72,0.10);
     --ma1:             #4a3aa7;
     --ma2:             #eb6834;
+    --ma3:             #e87ba4;
   }
 
   .viz-root {
@@ -811,6 +815,7 @@
   ];
   const DEFAULT_RANGE = "1M";
   const MA_SHORT = 20;
+  const MA_MID = 60;
   const MA_LONG = 180;
   const VALUATION_METRIC_INFO = {
     PER: "PER(주가수익비율) = 주가 ÷ 주당순이익(EPS). 지금 주가가 회사가 벌어들이는 이익의 몇 배인지를 나타내며, 낮을수록 이익 대비 주가가 저렴하다는 뜻입니다.",
@@ -828,14 +833,14 @@
     return out;
   }
 
-  // Looks for an actual golden/dead cross event (MA_SHORT crossing MA_LONG) within the last
+  // Looks for an actual golden/dead cross event (MA_SHORT crossing MA_MID) within the last
   // `lookback` trading days — not just "which is on top right now", which would flag every
   // day of an existing trend instead of the moment it started.
-  function detectCross(ma20, maLong, lookback = 5) {
+  function detectCross(maA, maB, lookback = 5) {
     const diffs = [];
-    for (let i = ma20.length - 1; i >= 0 && diffs.length < lookback + 1; i--) {
-      if (ma20[i] === null || maLong[i] === null) break;
-      diffs.unshift(ma20[i] - maLong[i]);
+    for (let i = maA.length - 1; i >= 0 && diffs.length < lookback + 1; i--) {
+      if (maA[i] === null || maB[i] === null) break;
+      diffs.unshift(maA[i] - maB[i]);
     }
     for (let i = 1; i < diffs.length; i++) {
       if (diffs[i - 1] <= 0 && diffs[i] > 0) return "golden";
@@ -912,14 +917,14 @@
     priceRow.appendChild(priceEl);
     priceRow.appendChild(deltaEl);
 
-    const cross = detectCross(computeMA(s, MA_SHORT), computeMA(s, MA_LONG));
+    const cross = detectCross(computeMA(s, MA_SHORT), computeMA(s, MA_MID));
     if (cross) {
       const crossEl = document.createElement("div");
       crossEl.className = "cross-badge " + cross;
       crossEl.textContent = cross === "golden" ? "골든크로스" : "데드크로스";
       crossEl.title = cross === "golden"
-        ? MA_SHORT + "일선이 " + MA_LONG + "일선을 최근 상향 돌파 — 흔히 매수 신호로 해석됩니다."
-        : MA_SHORT + "일선이 " + MA_LONG + "일선을 최근 하향 돌파 — 흔히 매도 신호로 해석됩니다.";
+        ? MA_SHORT + "일선이 " + MA_MID + "일선을 최근 상향 돌파 — 흔히 매수 신호로 해석됩니다."
+        : MA_SHORT + "일선이 " + MA_MID + "일선을 최근 하향 돌파 — 흔히 매도 신호로 해석됩니다.";
       priceRow.appendChild(crossEl);
     }
 
@@ -1491,7 +1496,8 @@
     legend.className = "chart-legend";
     legend.innerHTML =
       '<span class="item"><span class="swatch" style="background:' + "var(--ma1)" + '"></span>' + MA_SHORT + '일선</span>' +
-      '<span class="item"><span class="swatch" style="background:' + "var(--ma2)" + '"></span>' + MA_LONG + '일선</span>';
+      '<span class="item"><span class="swatch" style="background:' + "var(--ma2)" + '"></span>' + MA_MID + '일선</span>' +
+      '<span class="item"><span class="swatch" style="background:' + "var(--ma3)" + '"></span>' + MA_LONG + '일선</span>';
 
     const toggle = document.createElement("div");
     toggle.className = "range-toggle";
@@ -1530,17 +1536,19 @@
     const n = stock.series.length;
     const count = days === Infinity ? n : Math.min(days, n);
     const ma20 = computeMA(stock.series, MA_SHORT);
-    const maLong = computeMA(stock.series, MA_LONG);
+    const ma60 = computeMA(stock.series, MA_MID);
+    const ma180 = computeMA(stock.series, MA_LONG);
     return {
       series: stock.series.slice(n - count),
       dates: stock.dates.slice(n - count),
       ma20: ma20.slice(n - count),
-      maLong: maLong.slice(n - count)
+      ma60: ma60.slice(n - count),
+      ma180: ma180.slice(n - count)
     };
   }
 
   function buildSparkline(stock, rangeKey) {
-    const { series: data, dates, ma20, maLong } = sliceForRange(stock, rangeKey);
+    const { series: data, dates, ma20, ma60, ma180 } = sliceForRange(stock, rangeKey);
     const ccy = stock.currency;
 
     // Axis labels are plain HTML (not SVG <text>) on purpose: the SVG below uses
@@ -1564,7 +1572,7 @@
 
     const W = 300, H = 64;
     const pad = 7;
-    const maValues = [...ma20, ...maLong].filter(v => v !== null && v !== undefined);
+    const maValues = [...ma20, ...ma60, ...ma180].filter(v => v !== null && v !== undefined);
     const min = Math.min(data.length ? Math.min(...data) : Infinity, ...(maValues.length ? maValues : [Infinity]));
     const max = Math.max(data.length ? Math.max(...data) : -Infinity, ...(maValues.length ? maValues : [-Infinity]));
     const mid = (min + max) / 2;
@@ -1626,7 +1634,7 @@
     area.setAttribute("stroke", "none");
     svg.appendChild(area);
 
-    [[ma20, "var(--ma1)"], [maLong, "var(--ma2)"]].forEach(([maSeries, color]) => {
+    [[ma20, "var(--ma1)"], [ma60, "var(--ma2)"], [ma180, "var(--ma3)"]].forEach(([maSeries, color]) => {
       const d = buildMAPath(maSeries, x, y);
       if (!d) return;
       const maLine = document.createElementNS(svgNS, "path");

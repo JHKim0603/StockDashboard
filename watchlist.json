@@ -6,7 +6,5 @@
   { "Symbol": "PLTR", "DisplayName": "팔란티어", "NewsQuery": "Palantir PLTR stock" },
   { "Symbol": "^IXIC", "DisplayName": "나스닥", "NewsQuery": "Nasdaq Composite index" },
   { "Symbol": "^GSPC", "DisplayName": "S&P 500", "NewsQuery": "S&P 500 index" },
-  { "Symbol": "^KS11", "DisplayName": "KOSPI", "NewsQuery": "코스피 지수" },
-  { "Symbol": "NQ=F", "DisplayName": "나스닥 선물", "MarketLabel": "선물", "IsIndex": true, "NewsQuery": "Nasdaq futures market" },
-  { "Symbol": "ES=F", "DisplayName": "S&P 500 선물", "MarketLabel": "선물", "IsIndex": true, "NewsQuery": "S&P 500 futures market" }
+  { "Symbol": "^KS11", "DisplayName": "KOSPI", "NewsQuery": "코스피 지수" }
 ]

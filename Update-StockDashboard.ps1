@@ -487,8 +487,6 @@ function Get-StockPageUrl {
             "^IXIC" { return "https://www.google.com/finance/quote/.IXIC:INDEXNASDAQ" }
             "^GSPC" { return "https://www.google.com/finance/quote/.INX:INDEXSP" }
             "^KS11" { return "https://finance.naver.com/sise/sise_index.naver?code=KOSPI" }
-            "NQ=F"  { return "https://finance.yahoo.com/quote/NQ=F/" }
-            "ES=F"  { return "https://finance.yahoo.com/quote/ES=F/" }
             default { return $null }
         }
     }

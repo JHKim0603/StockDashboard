@@ -642,10 +642,34 @@ $stocks = foreach ($t in $tickers) {
     Start-Sleep -Milliseconds 400  # be gentle with Yahoo's unofficial endpoint across 7 tickers
 }
 
+# Skipping a flaky ticker is fine; ending up with *nothing* is not. Without this the run would
+# cheerfully publish an empty dashboard and mail out an empty table, all with a green checkmark.
+$stocks = @($stocks)
+if ($stocks.Count -eq 0) {
+    if ($env:CI) { Write-Host "::error::All $($tickers.Count) tickers failed to fetch - refusing to publish an empty dashboard." }
+    throw "All $($tickers.Count) tickers failed to fetch (Yahoo rate limit or outage?) - aborting so the previous good dashboard/email stays in place."
+}
+if ($stocks.Count -lt $tickers.Count) {
+    $missing = $tickers.Count - $stocks.Count
+    if ($env:CI) { Write-Host "::warning::$missing of $($tickers.Count) tickers failed to fetch - dashboard published without them." }
+}
+
+# ConvertTo-Json on $null returns $null (not the string "null"), and String.Replace() coerces a
+# $null replacement to "" — which would emit `const fearGreed = ;` into the page, a hard
+# SyntaxError that stops the whole script block and renders a completely blank dashboard.
+# Any optional value that can legitimately be missing must go through this.
+function ConvertTo-JsonOrNull {
+    param($InputObject, $Depth = 4)
+    if ($null -eq $InputObject) { return "null" }
+    $json = ConvertTo-Json -InputObject $InputObject -Depth $Depth
+    if ($null -eq $json -or $json -eq "") { return "null" }
+    return $json
+}
+
 $stocksJson = ConvertTo-Json -InputObject @($stocks) -Depth 8
-$usdKrwJson = ConvertTo-Json -InputObject $usdKrw
-$usdKrwSeriesJson = ConvertTo-Json -InputObject $usdKrwSeries -Depth 4
-$fearGreedJson = ConvertTo-Json -InputObject $fearGreed
+$usdKrwJson = ConvertTo-JsonOrNull -InputObject $usdKrw
+$usdKrwSeriesJson = ConvertTo-JsonOrNull -InputObject $usdKrwSeries -Depth 4
+$fearGreedJson = ConvertTo-JsonOrNull -InputObject $fearGreed
 $fetchedAt = $nowKst.ToString("yyyy-MM-ddTHH:mm:ss") + "+09:00"  # $nowKst's DateTimeKind is still Utc after the manual +9h shift, so "zzz" would report +00:00 — append the known-fixed KST offset literally instead.
 
 $template = Get-Content -Path (Join-Path $root "template.html") -Raw -Encoding UTF8

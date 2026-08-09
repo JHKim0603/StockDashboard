@@ -81,6 +81,36 @@ function Get-KoreanTranslation {
     }
 }
 
+# 호재/악재 판별 키워드. 기사 제목만 보고 판단하는 단순 규칙 기반 분류라 100% 정확하지 않음 —
+# 대시보드/이메일에도 "참고용" 이라고 표기하고, 애매하면 굳이 한쪽으로 몰지 않고 중립으로 둔다.
+# 영문 기사는 이미 한국어로 번역된 제목을 넘겨받으므로 한글 키워드만으로 대부분 커버되지만,
+# 번역이 실패했을 때를 대비해 영문 키워드도 같이 둔다.
+$sentimentKeywords = @{
+    good = @(
+        "급등", "상승", "강세", "훈풍", "호조", "호실적", "최고가", "신고가", "사상 최대", "사상 최고",
+        "수주", "계약 체결", "공급 계약", "흑자", "개선", "성장", "확대", "돌파", "반등", "회복",
+        "기대감", "목표가 상향", "상향 조정", "매수", "투자 확대", "수혜", "선정", "인수",
+        "surge", "soar", "jump", "rally", "beat", "record high", "upgrade", "outperform", "gain"
+    )
+    bad = @(
+        "급락", "하락", "약세", "폭락", "부진", "적자", "감소", "축소", "우려", "리스크", "악재",
+        "하향 조정", "목표가 하향", "매도", "손실", "리콜", "결함", "제재", "과징금", "소송", "고발",
+        "파업", "중단", "지연", "철수", "구조조정", "위기", "경고", "논란", "조사", "압수수색",
+        "plunge", "slump", "tumble", "drop", "fall", "miss", "downgrade", "underperform", "loss", "probe"
+    )
+}
+
+function Get-NewsSentiment {
+    # 제목에 등장한 호재/악재 키워드 수를 세어 더 많은 쪽으로 분류. 동점이거나 하나도 없으면 중립.
+    param($title)
+    if (-not $title) { return "neutral" }
+    $goodHits = @($sentimentKeywords.good | Where-Object { $title -like "*$_*" }).Count
+    $badHits  = @($sentimentKeywords.bad  | Where-Object { $title -like "*$_*" }).Count
+    if ($goodHits -gt $badHits) { return "good" }
+    if ($badHits -gt $goodHits) { return "bad" }
+    return "neutral"
+}
+
 function Get-NewsHeadlines {
     param($query, $lang, $max = 4)
 
@@ -108,12 +138,17 @@ function Get-NewsHeadlines {
                 Start-Sleep -Milliseconds 200  # be gentle with the unofficial translate endpoint
             }
 
+            $displayTitle = if ($titleKo) { $titleKo } else { $title }
+            # 번역본과 원문 둘 다에서 키워드를 찾도록 합쳐서 판별 (번역이 키워드를 흐리는 경우 대비)
+            $sentiment = Get-NewsSentiment "$displayTitle $title"
+
             [PSCustomObject]@{
-                title         = if ($titleKo) { $titleKo } else { $title }
+                title         = $displayTitle
                 titleOriginal = if ($titleKo) { $title } else { $null }
                 source        = $source
                 date          = $pubDate.ToString("yyyy-MM-dd")
                 link          = $it.link
+                sentiment     = $sentiment
             }
         })
     } catch {
@@ -653,7 +688,12 @@ $rowsHtml = foreach ($s in $stocks) {
     $newsHtml = ""
     if ($s.news -and $s.news.Count -gt 0) {
         $newsLines = foreach ($n in ($s.news | Select-Object -First 2)) {
-            "<div style='font-size:12px;color:#52514e;margin-top:3px;'>· <a href='$($n.link)' style='color:#2a78d6;text-decoration:none;'>$($n.title)</a></div>"
+            $tag = switch ($n.sentiment) {
+                "good" { "<span style='color:#0ca30c;font-weight:700;'>[호재]</span> " }
+                "bad"  { "<span style='color:#e34948;font-weight:700;'>[악재]</span> " }
+                default { "" }
+            }
+            "<div style='font-size:12px;color:#52514e;margin-top:3px;'>· $tag<a href='$($n.link)' style='color:#2a78d6;text-decoration:none;'>$($n.title)</a></div>"
         }
         $newsHtml = $newsLines -join ""
     }

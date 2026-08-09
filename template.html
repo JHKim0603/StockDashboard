@@ -498,6 +498,17 @@
   .news-list a:hover { color: var(--accent); text-decoration: underline; }
   .news-list a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .news-list .arrow { color: var(--ink-muted); margin-left: 3px; }
+  .news-tag {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: 700;
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-right: 5px;
+    vertical-align: 1px;
+  }
+  .news-tag.good { color: var(--good); background: var(--good-wash); }
+  .news-tag.bad  { color: var(--bad);  background: var(--bad-wash); }
   .news-meta {
     display: block;
     font-size: 11px;
@@ -788,6 +799,7 @@
     <li>시세 출처: Yahoo Finance 무료 API(최대 15~20분 지연 가능).</li>
     <li>최근 이슈는 Google 뉴스 검색 상위 기사의 원문 제목이며 AI가 작성한 요약이 아닙니다.</li>
     <li>미국 종목의 영문 기사 제목은 Google 번역으로 자동 번역되어 표시되며("번역됨" 표시, 마우스를 올리면 원문 확인 가능), 기계 번역이라 원문과 뉘앙스가 다를 수 있습니다 — 링크는 항상 영문 원문 기사로 연결됩니다.</li>
+    <li>[호재]/[악재] 표시는 기사 <em>제목</em>에 포함된 키워드만으로 자동 분류한 참고 표시입니다 — 기사 본문을 읽고 판단한 것이 아니므로 실제 내용과 다를 수 있고, 애매한 기사는 표시되지 않습니다.</li>
     <li>실적·목표주가·환율 데이터 출처: 네이버 증권 / Yahoo Finance(증권사 컨센서스 포함, 종목별로 제공 여부가 다를 수 있음).</li>
     <li>공포·탐욕지수 출처: CNN Business Fear &amp; Greed Index(미국 증시 전반 투자심리 지표 — 나스닥 개별 종목이 아닌 시장 전체 기준).</li>
     <li>투자 판단의 참고용으로만 사용하세요 — 개인 용도 조회입니다.</li>
@@ -1756,6 +1768,12 @@
       a.rel = "noopener noreferrer";
       a.innerHTML = "";
       if (item.titleOriginal) a.title = item.titleOriginal;
+      if (item.sentiment && item.sentiment !== "neutral") {
+        const tag = document.createElement("span");
+        tag.className = "news-tag " + item.sentiment;
+        tag.textContent = item.sentiment === "good" ? "호재" : "악재";
+        a.appendChild(tag);
+      }
       const titleSpan = document.createElement("span");
       titleSpan.textContent = item.title;
       const arrow = document.createElement("span");

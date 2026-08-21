@@ -746,18 +746,25 @@ $rowsHtml = foreach ($s in $stocks) {
 $fxLine = if ($usdKrw) { " · USD/KRW $($usdKrw.ToString('N2'))" } else { "" }
 $fgLine = if ($fearGreed) { " · 공포·탐욕지수 $($fearGreed.score)($($fearGreed.ratingKo))" } else { "" }
 
+# Email subject lines are plain text by spec — a hyperlink can't live there. The equivalent is a
+# prominent button at the very top of the body, which is one tap away in any mail client.
+$dashboardUrl = "https://jhkim0603.github.io/stockdashboard/"
+
 $emailHtml = @"
 <!DOCTYPE html>
 <html><body style="margin:0;padding:0;background:#f9f9f7;font-family:'Malgun Gothic',sans-serif;">
 <div style="max-width:600px;margin:0 auto;padding:24px 16px;">
   <h2 style="margin:0 0 4px;color:#0b0b0b;">JH 주식 투자 Dashboard</h2>
-  <div style="font-size:12px;color:#898781;margin-bottom:16px;">$emailDateStr 기준$fxLine$fgLine</div>
+  <div style="font-size:12px;color:#898781;margin-bottom:14px;">$emailDateStr 기준$fxLine$fgLine</div>
+  <div style="margin-bottom:16px;">
+    <a href="$dashboardUrl" style="display:inline-block;background:#2a78d6;color:#ffffff;font-size:13px;font-weight:bold;text-decoration:none;padding:10px 18px;border-radius:6px;">📊 대시보드 열기 →</a>
+  </div>
   <table style="width:100%;border-collapse:collapse;background:#ffffff;border:1px solid #e1e0d9;border-radius:8px;">
     $($rowsHtml -join "`n")
   </table>
   <div style="margin-top:16px;font-size:11px;color:#898781;line-height:1.6;">
     시세 출처: Yahoo Finance. 뉴스 출처: Google 뉴스(영문 기사는 자동 번역). 투자 판단 참고용으로만 사용하세요 — 개인 용도 요약입니다.<br>
-    실적·목표주가·전체 차트 등 자세한 내용은 대시보드에서 확인하세요.
+    실적·목표주가·이동평균선·전체 차트 등 자세한 내용은 <a href="$dashboardUrl" style="color:#2a78d6;">대시보드</a>에서 확인하세요.
   </div>
 </div>
 </body></html>
